@@ -29,7 +29,9 @@ mustContain('v1.0.6 hardening marker', '__subtitleBridgePOCv106');
 mustContain('normalized first embedded subtitle id', 'p = "EMBEDDED_" + r');
 mustContain('normalized embedded subtitle showing mode', 'mode: "EMBEDDED_" + r === p ? "showing" : "disabled"');
 
-const selection = sectionBetween('case "selectedSubtitlesTrackId":', 'case "subtitlesOffset":');
+const setterStart = source.indexOf('function V(e, t)');
+assert(setterStart >= 0, 'webOS property setter function V(e,t) missing');
+const selection = sectionBetween('case "selectedSubtitlesTrackId":', 'case "subtitlesOffset":', setterStart);
 assert(selection.includes('0 === (t || "").indexOf("EMBEDDED_")'), 'EMBEDDED_n selection guard missing');
 assert(selection.includes('p = t'), 'selected embedded id is not retained');
 assert(selection.includes('parseInt(t.replace("EMBEDDED_", ""))'), 'embedded id is not converted to native index');

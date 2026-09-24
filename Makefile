@@ -50,6 +50,7 @@ build: service/server.js service/bin/ffmpeg service/bin/ffprobe
 
 test: build
 	@echo "==> Testing embedded subtitle selection + cue POC..."
+	@node --check service/www/video.chunk.js
 	@node scripts/test-embedded-subtitle-poc.js service/www/video.chunk.js
 
 package: test
