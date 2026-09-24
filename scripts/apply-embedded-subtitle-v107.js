@@ -121,7 +121,7 @@ replaceSection(
                     }
                 }
 
-                function __sbFetchTextWithTimeout`,
+`,
 );
 
 replaceOnce(
