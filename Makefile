@@ -38,6 +38,9 @@ build: service/server.js service/bin/ffmpeg service/bin/ffprobe
 		echo "    Applying $$(basename $$p)..."; \
 		patch -p0 -d service/www < "$$p"; \
 	done
+	@echo "==> Applying Subtitle Bridge embedded subtitle POC..."
+	@node scripts/apply-embedded-subtitle-poc.js service/www/video.chunk.js
+	@grep -q 'data-subtitle-bridge-poc' service/www/video.chunk.js
 	@echo "==> Build complete"
 
 package: build
