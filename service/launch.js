@@ -7,7 +7,7 @@ var fs = require('fs');
 var path = require('path');
 var Service = require('webos-service');
 
-var service = new Service('io.strem.tv.server');
+var service = new Service('com.pyaesone.stremiosb.server');
 var ready = false;
 var pendingMessages = [];
 
