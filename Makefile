@@ -47,6 +47,8 @@ build: service/server.js service/bin/ffmpeg service/bin/ffprobe
 	@grep -q '__subtitleBridgePOCv107' service/www/video.chunk.js
 	@echo "==> Applying Subtitle Bridge external subtitle POC..."
 	@node scripts/apply-external-subtitle-poc.js service/www/video.chunk.js
+	@node scripts/apply-embedded-subtitle-v108.js service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv108' service/www/video.chunk.js
 	@grep -q 'data-subtitle-bridge-external-word' service/www/video.chunk.js
 	@echo "==> Build complete"
 
@@ -54,6 +56,7 @@ test: build
 	@echo "==> Testing embedded subtitle selection + cue POC..."
 	@node --check service/www/video.chunk.js
 	@node scripts/test-embedded-subtitle-poc.js service/www/video.chunk.js
+	@node scripts/test-webos-subtitle-lifecycle.js service/www/video.chunk.js
 
 package: test
 	@rm -f $(IPK)
