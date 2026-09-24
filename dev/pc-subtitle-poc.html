@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Subtitle Bridge webOS POC - PC Test</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #0c0b11;
+      color: #fff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+    body { background: radial-gradient(circle at center, #25222d 0, #0c0b11 70%); }
+
+    .player {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background:
+        linear-gradient(rgba(0,0,0,.15), rgba(0,0,0,.55)),
+        radial-gradient(circle at 50% 38%, #46404f 0, #201d25 48%, #0c0b11 100%);
+    }
+
+    .topbar {
+      position: absolute;
+      top: 22px;
+      left: 28px;
+      right: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 15px;
+      color: rgba(255,255,255,.72);
+      pointer-events: none;
+    }
+
+    .status {
+      padding: 8px 12px;
+      border: 1px solid rgba(255,255,255,.16);
+      border-radius: 8px;
+      background: rgba(0,0,0,.28);
+      backdrop-filter: blur(8px);
+    }
+
+    .hint {
+      position: absolute;
+      left: 50%;
+      top: 42%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: rgba(255,255,255,.52);
+      line-height: 1.55;
+      font-size: 17px;
+      pointer-events: none;
+    }
+
+    .subtitles {
+      position: absolute;
+      left: 5vw;
+      right: 5vw;
+      bottom: 10vh;
+      z-index: 5;
+      text-align: center;
+      pointer-events: none;
+      font-size: 4vmin;
+      font-weight: 600;
+      line-height: 1.35;
+      text-shadow: rgb(34,34,34) 1px 1px .1em;
+    }
+
+    .subtitle-line { margin: .12em 0; }
+
+    .word {
+      display: inline-block;
+      margin: 0 .12em;
+      padding: .04em .08em;
+      pointer-events: auto;
+      cursor: pointer;
+      border-radius: 0;
+      outline: none;
+      background: transparent;
+      transition: background .08s ease, outline .08s ease;
+    }
+
+    .word.hovered:not(.selected) {
+      outline: 1px solid rgba(255,255,255,.65);
+    }
+
+    .word.selected {
+      outline: 2px solid rgba(255,255,255,.95);
+      background: rgba(20,20,20,.72);
+      border-radius: 4px;
+    }
+
+    .paused-badge {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 12px 18px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.48);
+      border: 1px solid rgba(255,255,255,.15);
+      font-weight: 700;
+      letter-spacing: .08em;
+      opacity: 0;
+      transition: opacity .12s ease;
+      pointer-events: none;
+    }
+
+    .player.paused .paused-badge { opacity: 1; }
+
+    .controls {
+      position: absolute;
+      left: 28px;
+      bottom: 24px;
+      right: 28px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      color: rgba(255,255,255,.7);
+      font-size: 14px;
+    }
+
+    button {
+      color: white;
+      background: rgba(123,91,245,.86);
+      border: 0;
+      border-radius: 7px;
+      padding: 10px 14px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+
+    code {
+      background: rgba(255,255,255,.09);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <main id="player" class="player">
+    <div class="topbar">
+      <div>Subtitle Bridge webOS - PC interaction POC</div>
+      <div id="status" class="status">Playing</div>
+    </div>
+
+    <div class="hint">
+      Fake subtitle cues change automatically.<br>
+      Wait for a subtitle, then press <code>↑</code>.
+    </div>
+
+    <div id="pausedBadge" class="paused-badge">PAUSED</div>
+    <div id="subtitles" class="subtitles"></div>
+
+    <div class="controls">
+      <button id="togglePlayback" type="button">Pause</button>
+      <span><code>↑</code> select first word · <code>←</code>/<code>→</code> navigate · click a word · <code>Esc</code>/<code>Backspace</code> exit</span>
+    </div>
+  </main>
+
+  <script>
+  (function() {
+    var player = document.getElementById('player');
+    var subtitles = document.getElementById('subtitles');
+    var status = document.getElementById('status');
+    var togglePlayback = document.getElementById('togglePlayback');
+
+    var cues = [
+      ['I never thought we would make it this far.'],
+      ['Sometimes the smallest choice', 'changes everything.'],
+      [],
+      ['Keep moving forward, even when it feels impossible.'],
+      ['This is only a PC interaction test.']
+    ];
+
+    var cueIndex = 0;
+    var paused = false;
+    var selecting = false;
+    var wasPausedBeforeSelection = false;
+    var words = [];
+    var selectedIndex = -1;
+    var timer = null;
+
+    function setPaused(value) {
+      paused = !!value;
+      player.classList.toggle('paused', paused);
+      status.textContent = paused ? 'Paused' : 'Playing';
+      togglePlayback.textContent = paused ? 'Play' : 'Pause';
+      if (paused) {
+        clearInterval(timer);
+        timer = null;
+      } else {
+        startTimer();
+      }
+    }
+
+    function startTimer() {
+      if (timer) return;
+      timer = setInterval(function() {
+        if (selecting || paused) return;
+        cueIndex = (cueIndex + 1) % cues.length;
+        renderCue(cues[cueIndex]);
+      }, 3500);
+    }
+
+    function renderCue(lines) {
+      subtitles.innerHTML = '';
+      words = [];
+      selectedIndex = -1;
+
+      lines.forEach(function(lineText) {
+        var line = document.createElement('div');
+        line.className = 'subtitle-line';
+
+        lineText.trim().split(/\s+/).filter(Boolean).forEach(function(token) {
+          var span = document.createElement('span');
+          var wordIndex = words.length;
+          span.className = 'word';
+          span.textContent = token;
+
+          span.addEventListener('mouseenter', function() {
+            if (selecting) {
+              setSelected(wordIndex);
+            } else {
+              span.classList.add('hovered');
+            }
+          });
+
+          span.addEventListener('mouseleave', function() {
+            span.classList.remove('hovered');
+          });
+
+          span.addEventListener('click', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            startSelection(wordIndex);
+          });
+
+          words.push(span);
+          line.appendChild(span);
+        });
+
+        subtitles.appendChild(line);
+      });
+    }
+
+    function setSelected(index) {
+      if (!words.length) return;
+      selectedIndex = Math.max(0, Math.min(words.length - 1, index));
+      words.forEach(function(word, i) {
+        word.classList.toggle('selected', i === selectedIndex);
+        word.classList.remove('hovered');
+      });
+    }
+
+    function startSelection(index) {
+      if (!words.length) return false;
+      if (!selecting) {
+        wasPausedBeforeSelection = paused;
+        setPaused(true);
+        selecting = true;
+      }
+      setSelected(typeof index === 'number' ? index : 0);
+      status.textContent = 'Word selection';
+      return true;
+    }
+
+    function exitSelection() {
+      if (!selecting) return;
+      selecting = false;
+      selectedIndex = -1;
+      words.forEach(function(word) {
+        word.classList.remove('selected');
+      });
+
+      if (!wasPausedBeforeSelection) {
+        setPaused(false);
+      } else {
+        setPaused(true);
+      }
+    }
+
+    window.addEventListener('keydown', function(event) {
+      var key = event.key;
+
+      if (!selecting && key === 'ArrowUp') {
+        if (!startSelection(0)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+
+      if (!selecting) return;
+
+      if (key === 'ArrowLeft') {
+        setSelected(selectedIndex - 1);
+      } else if (key === 'ArrowRight') {
+        setSelected(selectedIndex + 1);
+      } else if (key === 'ArrowUp') {
+        setSelected(0);
+      } else if (key === 'Escape' || key === 'Backspace') {
+        exitSelection();
+      } else {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+    }, true);
+
+    togglePlayback.addEventListener('click', function() {
+      if (selecting) {
+        exitSelection();
+      } else {
+        setPaused(!paused);
+      }
+    });
+
+    renderCue(cues[cueIndex]);
+    startTimer();
+  })();
+  </script>
+</body>
+</html>
