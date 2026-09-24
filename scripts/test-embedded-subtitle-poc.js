@@ -25,6 +25,7 @@ function sectionBetween(startText, endText, fromIndex = 0) {
 
 mustContain('POC marker', 'data-subtitle-bridge-poc');
 mustContain('v1.0.6 hardening marker', '__subtitleBridgePOCv106');
+mustContain('v1.0.7 hardening marker', '__subtitleBridgePOCv107');
 
 mustContain('normalized first embedded subtitle id', 'p = "EMBEDDED_" + r');
 mustContain('normalized embedded subtitle showing mode', 'mode: "EMBEDDED_" + r === p ? "showing" : "disabled"');
@@ -48,10 +49,19 @@ mustContain('LG native subtitle event subscription', 'method: "subscribe"');
 mustContain('LG subtitleData event', 'e && e.subtitleData');
 mustContain('LG subtitle cue payload', 't.subtitleData');
 mustContain('LG media service', 'luna://com.webos.media');
+mustContain('first-load pending embedded track state', '__sbPendingEmbeddedTrackId');
+mustContain('first-load embedded apply helper', 'function __sbApplyPendingEmbeddedTrack()');
+mustContain('mediaId validity guard', '"<invalid mediaId>" === A.mediaId');
+mustContain('pipeline-ready subscription marker', '__sbNativeCueSourceInfoSeen = !0');
+mustContain('subscription watchdog', 'pipeline subscribe timeout #');
+mustContain('bounded subscription retry', '__sbNativeCueAttempt >= 8');
+assert(source.includes('__sbPendingEmbeddedTrackId = t, p = t'), 'embedded selection is not queued before mediaId is available');
+assert(source.includes('__sbApplyPendingEmbeddedTrack(), __sbEnsureNativeCueTap(!1)'), 'normal update loop does not apply queued first-load selection');
+assert(!source.includes('"/subtitles.vtt?from=" + encodeURIComponent(D.url)'), 'movie URL is still incorrectly sent to /subtitles.vtt');
 
 const ensureFallback = sectionBetween('function __sbEnsureFallback()', 'function __sbSetSelected(e)');
-assert(ensureFallback.includes('__sbFetchTextWithTimeout(i, 5e3)'), 'server backup is missing 5s hard timeout');
-assert(ensureFallback.includes('__sbFetchTextWithTimeout(u, 3500)'), 'FFmpeg backup is missing hard timeout');
+assert(!ensureFallback.includes('/subtitles.vtt?from='), 'external-subtitle proxy must not receive the movie URL');
+assert(ensureFallback.includes('__sbFetchTextWithTimeout(s, 4e3)'), 'FFmpeg last-resort backup is missing hard timeout');
 assert(!ensureFallback.includes('__sbSetNativeSubtitleEnabled(!1)'), 'backup extraction must not hide working native subtitles');
 
 const keydown = sectionBetween('function __sbKeydown(e)', 'window.addEventListener("keydown", __sbKeydown, !0);');
@@ -76,6 +86,8 @@ mustContain('LG cue debug state', '| lgCue:');
 
 console.log('Embedded subtitle integration tests: PASS');
 console.log('  EMBEDDED_n -> LG native index mapping: PASS');
+console.log('  first-load embedded selection queue: PASS');
+console.log('  LG pipeline subscription retry/watchdog: PASS');
 console.log('  LG subtitleData cue capture path: PASS');
 console.log('  first ArrowUp preserved for Stremio: PASS');
 console.log('  second ArrowUp enters word selection: PASS');
