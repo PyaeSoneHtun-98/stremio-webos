@@ -40,7 +40,9 @@ build: service/server.js service/bin/ffmpeg service/bin/ffprobe
 	done
 	@echo "==> Applying Subtitle Bridge embedded subtitle POC..."
 	@node scripts/apply-embedded-subtitle-poc.js service/www/video.chunk.js
+	@node scripts/apply-embedded-subtitle-v106.js service/www/video.chunk.js
 	@grep -q 'data-subtitle-bridge-poc' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv106' service/www/video.chunk.js
 	@echo "==> Applying Subtitle Bridge external subtitle POC..."
 	@node scripts/apply-external-subtitle-poc.js service/www/video.chunk.js
 	@grep -q 'data-subtitle-bridge-external-word' service/www/video.chunk.js

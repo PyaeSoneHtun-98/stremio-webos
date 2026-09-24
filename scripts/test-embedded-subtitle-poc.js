@@ -12,94 +12,70 @@ if (!target) {
 const source = fs.readFileSync(target, 'utf8');
 
 function mustContain(name, text) {
-    assert(
-        source.includes(text),
-        'Embedded subtitle test failed: missing ' + name,
-    );
+    assert(source.includes(text), 'Embedded subtitle test failed: missing ' + name);
 }
 
-function sectionBetween(startText, endText) {
-    const start = source.indexOf(startText);
+function sectionBetween(startText, endText, fromIndex = 0) {
+    const start = source.indexOf(startText, fromIndex);
     assert(start >= 0, 'Embedded subtitle test failed: missing section start: ' + startText);
     const end = source.indexOf(endText, start + startText.length);
     assert(end > start, 'Embedded subtitle test failed: missing section end: ' + endText);
     return source.slice(start, end);
 }
 
-// 1) POC is actually present in the packaged player.
 mustContain('POC marker', 'data-subtitle-bridge-poc');
+mustContain('v1.0.6 hardening marker', '__subtitleBridgePOCv106');
 
-// 2) Native LG subtitle discovery must keep Stremio IDs in EMBEDDED_n form.
-//    This catches the old bug where the first selected track was stored as numeric 0.
-mustContain(
-    'normalized first embedded subtitle id',
-    'p = "EMBEDDED_" + r',
-);
-mustContain(
-    'normalized embedded subtitle showing mode',
-    'mode: "EMBEDDED_" + r === p ? "showing" : "disabled"',
-);
+mustContain('normalized first embedded subtitle id', 'p = "EMBEDDED_" + r');
+mustContain('normalized embedded subtitle showing mode', 'mode: "EMBEDDED_" + r === p ? "showing" : "disabled"');
 
-// 3) Selecting EMBEDDED_n must translate to LG native track index n.
-//    Test the actual patched bundle, not a duplicate implementation.
-const selection = sectionBetween(
-    'case "selectedSubtitlesTrackId":',
-    'case "subtitlesOffset":',
-);
-assert(
-    selection.includes('0 === (t || "").indexOf("EMBEDDED_")'),
-    'Embedded subtitle test failed: EMBEDDED_n selection guard missing',
-);
-assert(
-    selection.includes('p = t'),
-    'Embedded subtitle test failed: selected embedded id is not retained',
-);
-assert(
-    selection.includes('parseInt(t.replace("EMBEDDED_", ""))'),
-    'Embedded subtitle test failed: embedded id is not converted to native index',
-);
-assert(
-    /method:\s*"selectTrack"[\s\S]*?type:\s*"text"[\s\S]*?index:\s*r/.test(selection),
-    'Embedded subtitle test failed: LG selectTrack(text,index) command missing',
-);
-assert(
-    /e\.mode\s*=\s*e\.id\s*===\s*p\s*\?\s*"showing"\s*:\s*"disabled"/.test(selection),
-    'Embedded subtitle test failed: selected track mode is not updated',
-);
-assert(
-    selection.includes('p = null') && selection.includes('E(!1)'),
-    'Embedded subtitle test failed: subtitle-off path no longer disables native subtitles',
-);
+const selection = sectionBetween('case "selectedSubtitlesTrackId":', 'case "subtitlesOffset":');
+assert(selection.includes('0 === (t || "").indexOf("EMBEDDED_")'), 'EMBEDDED_n selection guard missing');
+assert(selection.includes('p = t'), 'selected embedded id is not retained');
+assert(selection.includes('parseInt(t.replace("EMBEDDED_", ""))'), 'embedded id is not converted to native index');
+assert(/method:\s*"selectTrack"[\s\S]*?type:\s*"text"[\s\S]*?index:\s*r/.test(selection), 'LG selectTrack(text,index) command missing');
+assert(/e\.mode\s*=\s*e\.id\s*===\s*p\s*\?\s*"showing"\s*:\s*"disabled"/.test(selection), 'selected track mode is not updated');
+assert(selection.includes('__sbNativeCueText = ""'), 'track change does not clear stale captured cue');
+assert(selection.includes('p = null') && selection.includes('E(!1)'), 'subtitle-off path no longer disables native subtitles');
 
-// 4) Verify several IDs map to exactly the expected native ordinal.
-//    This protects against off-by-one changes in future bundle patches.
-for (const [id, expected] of [
-    ['EMBEDDED_0', 0],
-    ['EMBEDDED_1', 1],
-    ['EMBEDDED_6', 6],
-]) {
-    const actual = parseInt(id.replace('EMBEDDED_', ''), 10);
-    assert.strictEqual(actual, expected, id + ' mapped to wrong native index');
+for (const [id, expected] of [['EMBEDDED_0',0],['EMBEDDED_1',1],['EMBEDDED_6',6]]) {
+    assert.strictEqual(parseInt(id.replace('EMBEDDED_', ''), 10), expected, id + ' mapped to wrong native index');
 }
 
-// 5) Extraction must never be allowed to disable native subtitles before
-//    actual text cues have been obtained. This keeps embedded subtitles visible
-//    when our custom extraction is slow or fails.
-const ensureFallback = sectionBetween(
-    'function __sbEnsureFallback()',
-    'function __sbSetSelected(e)',
-);
-const firstDisable = ensureFallback.indexOf('__sbSetNativeSubtitleEnabled(!1)');
-const firstReady = ensureFallback.indexOf('__sbFallbackReady = !0');
-assert(firstReady >= 0, 'Embedded subtitle test failed: extraction ready state missing');
-assert(firstDisable > firstReady, 'Embedded subtitle test failed: native subtitles disabled before extracted cues are ready');
+mustContain('LG native subtitle event subscription', 'method: "subscribe"');
+mustContain('LG subtitleData event', 'e && e.subtitleData');
+mustContain('LG subtitle cue payload', 't.subtitleData');
+mustContain('LG media service', 'luna://com.webos.media');
 
-// 6) Debug state must expose native-track count and selected id so one TV run
-//    can validate selection and extraction together.
+const ensureFallback = sectionBetween('function __sbEnsureFallback()', 'function __sbSetSelected(e)');
+assert(ensureFallback.includes('__sbFetchTextWithTimeout(i, 5e3)'), 'server backup is missing 5s hard timeout');
+assert(ensureFallback.includes('__sbFetchTextWithTimeout(u, 3500)'), 'FFmpeg backup is missing hard timeout');
+assert(!ensureFallback.includes('__sbSetNativeSubtitleEnabled(!1)'), 'backup extraction must not hide working native subtitles');
+
+const keydown = sectionBetween('function __sbKeydown(e)', 'window.addEventListener("keydown", __sbKeydown, !0);');
+const prime = keydown.indexOf('i > __sbUpPrimedUntil');
+const start = keydown.indexOf('__sbStartSelection(0)');
+assert(prime >= 0 && start > prime, 'first ArrowUp is not reserved for Stremio before word selection');
+assert(keydown.includes('__sbUpPrimedUntil = i + 3500'), 'first ArrowUp pass-through window missing');
+
+const updateLoopStart = source.indexOf('function __sbKeydown');
+const updateLoop = sectionBetween('function U() {', 'function B(e) {', updateLoopStart);
+assert(updateLoop.includes('__sbEnsureNativeCueTap()'), 'normal playback does not attach LG cue listener');
+assert(!updateLoop.includes('__sbEnsureFallback()'), 'backup extractor still auto-runs during normal playback');
+
+const startSelection = sectionBetween('function __sbStartSelection(e)', 'function __sbExitSelection(e)');
+assert(startSelection.includes('__sbSetNativeSubtitleEnabled(!1)'), 'native subtitles are not hidden when word-selection overlay actually opens');
+const exitSelection = sectionBetween('function __sbExitSelection(e)', 'function __sbPlainText(e)');
+assert(exitSelection.includes('__sbSetNativeSubtitleEnabled(!0)'), 'native subtitles are not restored after word-selection mode');
+
 mustContain('native track debug count', 'nativeTracks:');
-mustContain('selected embedded track debug state', 'selectedEmbeddedTrackId: p');
+mustContain('selected embedded debug id', '| selected:');
+mustContain('LG cue debug state', '| lgCue:');
 
-console.log('Embedded subtitle selection test: PASS');
+console.log('Embedded subtitle integration tests: PASS');
 console.log('  EMBEDDED_n -> LG native index mapping: PASS');
-console.log('  selected track mode retention: PASS');
-console.log('  native fallback safety: PASS');
+console.log('  LG subtitleData cue capture path: PASS');
+console.log('  first ArrowUp preserved for Stremio: PASS');
+console.log('  second ArrowUp enters word selection: PASS');
+console.log('  backup extraction timeouts: PASS');
+console.log('  native subtitle fallback safety: PASS');
