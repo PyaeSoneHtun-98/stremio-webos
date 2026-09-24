@@ -9,7 +9,7 @@ FFMPEG_SHA256 = f4149bb2b0784e30e99bdda85471c9b5930d3402014e934a5098b41d0f7201b1
 VERSION = $(shell python3 -c "import json; print(json.load(open('app/appinfo.json'))['version'])")
 IPK = $(APP_ID)_$(VERSION)_all.ipk
 
-.PHONY: build package deploy launch restart clean
+.PHONY: build test package deploy launch restart clean
 
 service/server.js:
 	@echo "==> Downloading Stremio server v$(SERVER_VERSION)..."
@@ -46,7 +46,11 @@ build: service/server.js service/bin/ffmpeg service/bin/ffprobe
 	@grep -q 'data-subtitle-bridge-external-word' service/www/video.chunk.js
 	@echo "==> Build complete"
 
-package: build
+test: build
+	@echo "==> Testing embedded subtitle selection + cue POC..."
+	@node scripts/test-embedded-subtitle-poc.js service/www/video.chunk.js
+
+package: test
 	@rm -f $(IPK)
 	@ares-package --no-minify app service -o .
 
