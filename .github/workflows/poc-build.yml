@@ -1,0 +1,34 @@
+name: Embedded Subtitle POC
+
+on:
+  push:
+    branches:
+      - feat/issue-1-embedded-subtitle-cue-poc
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install webOS CLI
+        run: npm install -g @webosose/ares-cli
+
+      - name: Build and package POC
+        run: make package
+
+      - name: Upload IPK
+        uses: actions/upload-artifact@v4
+        with:
+          name: stremio-webos-embedded-subtitle-poc
+          path: io.strem.tv_*_all.ipk
+          if-no-files-found: error
