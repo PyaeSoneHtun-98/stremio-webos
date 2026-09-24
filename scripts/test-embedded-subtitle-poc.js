@@ -72,7 +72,7 @@ assert(keydown.includes('__sbUpPrimedUntil = i + 3500'), 'first ArrowUp pass-thr
 
 const updateLoopStart = source.indexOf('function __sbKeydown');
 const updateLoop = sectionBetween('function U() {', 'function B(e) {', updateLoopStart);
-assert(updateLoop.includes('__sbEnsureNativeCueTap()'), 'normal playback does not attach LG cue listener');
+assert(updateLoop.includes('__sbApplyPendingEmbeddedTrack(), __sbEnsureNativeCueTap(!1)'), 'normal playback does not apply first-load embedded selection and attach LG cue listener');
 assert(!updateLoop.includes('__sbEnsureFallback()'), 'backup extractor still auto-runs during normal playback');
 
 const startSelection = sectionBetween('function __sbStartSelection(e)', 'function __sbExitSelection(e)');
