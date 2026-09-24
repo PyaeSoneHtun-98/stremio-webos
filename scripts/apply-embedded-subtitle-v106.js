@@ -115,7 +115,7 @@ const helpers = `                function __sbUpdateDebug(e, t, r) {
                     return ""
                 }
 
-                function __sbParseTime`;
+`;
 
 replaceSection(
     'debug + LG native cue helpers',
@@ -132,7 +132,7 @@ replaceSection(
                     __sbFallbackCues = [], __sbFallbackKey = "", __sbFallbackRequestKey = "", __sbFallbackStart = 0, __sbFallbackEnd = 0, __sbFallbackLoading = !1, __sbFallbackReady = !1, __sbFallbackError = "", __sbFallbackMethod = "idle", __sbCueSource = __sbNativeCueText ? "lg" : "none", e && __sbSetNativeSubtitleEnabled(!0)
                 }
 
-                function __sbEnsureFallback() {`,
+`,
 );
 
 replaceSection(
@@ -170,7 +170,7 @@ replaceSection(
                     }
                 }
 
-                function __sbSetSelected(e) {`,
+`,
 );
 
 replaceSection(
@@ -188,7 +188,7 @@ replaceSection(
                     })), window.__subtitleBridgeEmbeddedActive = !1, __sbSetNativeSubtitleEnabled(!0), __sbRender(""), e && !__sbWasPaused && A.play())
                 }
 
-                function __sbPlainText(e) {`,
+`,
 );
 
 replaceSection(
@@ -218,7 +218,7 @@ replaceSection(
                         e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation && e.stopImmediatePropagation()
                     }
                 }
-                window.addEventListener("keydown", __sbKeydown, !0);`,
+`,
 );
 
 const keydownPos = source.indexOf('function __sbKeydown');
@@ -238,7 +238,7 @@ replaceSection(
                     window.__subtitleBridgeWebOSPOC = { textTrackCount: e.length, activeCueCount: n.length, nativeTrackCount: y ? y.length : 0, selectedEmbeddedTrackId: p, cueText: a, cueSource: __sbCueSource, nativeCueSeen: __sbNativeCueSeen, nativeCueError: __sbNativeCueError, fallbackReady: __sbFallbackReady, fallbackLoading: __sbFallbackLoading, fallbackError: __sbFallbackError, fallbackWindow: [__sbFallbackStart, __sbFallbackEnd], selecting: __sbSelecting, lastKey: __sbLastKey }, __sbUpdateDebug(e.length, __sbSelecting ? __sbWords.length : 0, a), __sbSelecting || __sbOverlay.style.display === "none" || __sbRender("")
                 }
 
-                function B(e) {`,
+`,
     keydownPos
 );
 
