@@ -1,5 +1,23 @@
 # Embedded subtitles: first-load lifecycle repair
 
+## v1.0.10: reproduced browser failure
+
+A real Chromium test of the complete generated `withStreamingServer` →
+`withHTMLSubtitles` → `WebOsVideo` chain reproduces the v1.0.9 error exactly:
+code 60, `Your device does not support the stream`, caused by
+`TypeError: Illegal invocation` at the lifecycle's `options.setInterval()` call.
+Passing `window.setInterval` directly as an options property changes its receiver
+to the options object. Browser timers require a Window receiver. The corresponding
+`clearInterval` call has the same problem. Node mocks did not enforce this rule.
+
+The adapter now provides forwarding functions that explicitly call
+`window.setInterval()` and `window.clearInterval()`. The browser regression fails
+on the old generated bundle and passes after this fix, including unload/destroy.
+CI runs this browser test before uploading the IPK. It uses the supplied Bleach
+URL unchanged, intercepting its media request so this PC does not try to use the
+TV's loopback streaming service. This proves the load/exception regression is
+fixed; it is not a codec or embedded-cue availability test.
+
 ## v1.0.9 playback regression correction
 
 The v1.0.8 patch incorrectly inserted `H("unload")` at the beginning of WebOsVideo

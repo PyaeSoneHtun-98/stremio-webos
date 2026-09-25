@@ -24,7 +24,11 @@ section('                function __sbClearNativeCueWatchdog() {', '            
                 var __sbLifecycle = (${createLifecycle.toString()})({
                     mediaId: function() { return A.mediaId },
                     now: function() { return Date.now() },
-                    setInterval: setInterval, clearInterval: clearInterval,
+                    // Window timer methods require Window as their receiver.
+                    // Passing them directly makes options.setInterval() throw
+                    // Illegal invocation in Chromium (Node mocks do not).
+                    setInterval: function(callback, delay) { return window.setInterval(callback, delay) },
+                    clearInterval: function(timer) { window.clearInterval(timer) },
                     request: function(options) { return window.webOS.service.request("luna://com.webos.media", options) },
                     onError: function(method, error) { __sbNativeCueError = method + ": " + String(error && (error.errorText || error.message || error.errorCode) || "failed") },
                     onSourceInfo: function() { __sbNativeCueSourceInfoSeen = !0 },

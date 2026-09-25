@@ -158,6 +158,8 @@ const adapterContext = {
     console
 };
 vm.createContext(adapterContext);
+adapterContext.window.setInterval = adapterContext.setInterval;
+adapterContext.window.clearInterval = adapterContext.clearInterval;
 const constructorStart = source.lastIndexOf('            function m(e) {', source.indexOf('E = function(e) { m = !e;'));
 const constructorEnd = source.indexOf('            m.canPlayStream', constructorStart);
 assert(constructorStart >= 0 && constructorEnd > constructorStart);

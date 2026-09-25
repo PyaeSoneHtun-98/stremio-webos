@@ -26,6 +26,12 @@ jobs:
       - name: Build and package POC
         run: make package
 
+      - name: Test generated player in real Chromium
+        run: |
+          npm install --prefix .work/browser-tests --no-save --package-lock=false playwright@1.62.1
+          .work/browser-tests/node_modules/.bin/playwright install --with-deps chromium
+          NODE_PATH="$PWD/.work/browser-tests/node_modules" node scripts/test-webos-browser-playback.js service/www/video.chunk.js
+
       - name: Upload IPK
         uses: actions/upload-artifact@v4
         with:
