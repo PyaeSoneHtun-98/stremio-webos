@@ -184,7 +184,17 @@ function requestBuffer(target, start, end, redirects) {
     });
 }
 
-function fetchRange(target, start, length) { return requestBuffer(target, start, start + length - 1, 0); }
+function fetchRange(target, start, length) {
+    var attempt = 0;
+    function run() {
+        return requestBuffer(target, start, start + length - 1, 0).catch(function(error) {
+            attempt++;
+            if (attempt >= 3) throw error;
+            return new Promise(function(resolve) { setTimeout(resolve, 150 * attempt); }).then(run);
+        });
+    }
+    return run();
+}
 
 function findCuesMagic(buf) {
     for (var i = 0; i + 4 <= buf.length; i++) if (buf[i] === 0x1c && buf[i+1] === 0x53 && buf[i+2] === 0xbb && buf[i+3] === 0x6b) return i;
@@ -369,13 +379,16 @@ function extractWindow(target, subtitleOrdinal, timeSec) {
         return loadCues(target, info).then(function(cues) {
             var anchors = chooseAnchors(cues, track.number, timeSec, info.timecodeScale);
             if (!anchors.length) throw new Error('No cluster anchors near requested time');
-            var collected=[];
-            var chain=Promise.resolve();
-            anchors.forEach(function(anchor, i) {
-                chain=chain.then(function(){ return loadCluster(target, info, anchor, anchors[i+1]).then(function(buf){ parseCluster(buf, track, info.timecodeScale, collected); }); });
-            });
-            return chain.then(function() {
-                var from=Math.max(0,timeSec-6), to=timeSec+26, cuesOut=finalizeCues(collected,from,to);
+            var collected=[], cursor=0;
+            function worker() {
+                var i=cursor++;
+                if (i >= anchors.length) return Promise.resolve();
+                return loadCluster(target, info, anchors[i], anchors[i+1]).then(function(buf) {
+                    parseCluster(buf, track, info.timecodeScale, collected);
+                }).then(worker);
+            }
+            return Promise.all([worker(), worker()]).then(function() {
+                var from=Math.max(0,timeSec-8), to=timeSec+32, cuesOut=finalizeCues(collected,from,to);
                 if (!cuesOut.length) throw new Error('No subtitle cues found near ' + timeSec.toFixed(1) + 's');
                 return { trackNumber: track.number, codec: track.codec, cues: cuesOut, window: [from,to] };
             });

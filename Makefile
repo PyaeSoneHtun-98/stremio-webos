@@ -49,8 +49,10 @@ build: service/server.js service/bin/ffmpeg service/bin/ffprobe
 	@node scripts/apply-external-subtitle-poc.js service/www/video.chunk.js
 	@node scripts/apply-embedded-subtitle-v108.js service/www/video.chunk.js
 	@node scripts/apply-embedded-subtitle-v111.js service/www/video.chunk.js
+	@node scripts/apply-embedded-subtitle-v112.js service/www/video.chunk.js
 	@grep -q '__subtitleBridgePOCv108' service/www/video.chunk.js
 	@grep -q '__subtitleBridgePOCv111' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv112' service/www/video.chunk.js
 	@grep -q 'data-subtitle-bridge-external-word' service/www/video.chunk.js
 	@echo "==> Build complete"
 
@@ -60,6 +62,7 @@ test: build
 	@node scripts/test-embedded-subtitle-poc.js service/www/video.chunk.js
 	@node scripts/test-webos-subtitle-lifecycle.js service/www/video.chunk.js
 	@node scripts/test-mkv-subtitle-extractor.js
+	@node scripts/test-mkv-subtitle-refresh.js service/www/video.chunk.js
 
 package: test
 	@rm -f $(IPK)

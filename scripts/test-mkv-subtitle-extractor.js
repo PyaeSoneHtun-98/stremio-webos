@@ -26,10 +26,14 @@ function makeFixture(){
 }
 
 async function main(){
-  const file=makeFixture(); let rangeRequests=0;
+  const file=makeFixture(); let rangeRequests=0, transientFailures=0;
   const server=http.createServer((req,res)=>{
     let start=0,end=file.length-1; const m=/bytes=(\d+)-(\d+)/.exec(req.headers.range||'');
-    if(m){ rangeRequests++; start=Number(m[1]);end=Math.min(Number(m[2]),file.length-1);res.statusCode=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${file.length}`); }
+    if(m){
+      rangeRequests++;
+      if(transientFailures===0){ transientFailures++; res.statusCode=503; return res.end('temporary'); }
+      start=Number(m[1]);end=Math.min(Number(m[2]),file.length-1);res.statusCode=206;res.setHeader('Content-Range',`bytes ${start}-${end}/${file.length}`);
+    }
     res.setHeader('Content-Length',end-start+1);res.end(file.slice(start,end+1));
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
@@ -44,7 +48,8 @@ async function main(){
     assert.strictEqual(result.cues[0].endTime,362.35);
     assert.strictEqual(result.cues[1].text,"Even if it's a future\nrewritten by a powerful force");
     assert(rangeRequests>0,'extractor must use HTTP Range requests');
-    console.log('PASS: range-based MKV extraction, EMBEDDED ordinal mapping, S_TEXT/ASS timing/text cleanup');
+    assert.strictEqual(transientFailures,1,'test must exercise transient Range retry');
+    console.log('PASS: range-based MKV extraction, transient retry, EMBEDDED ordinal mapping, S_TEXT/ASS timing/text cleanup');
   } finally { server.close(); }
 }
 main().catch(error=>{console.error(error);process.exitCode=1});
