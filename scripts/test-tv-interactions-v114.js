@@ -7,7 +7,7 @@ const source = fs.readFileSync(process.argv[2], 'utf8');
 
 assert(source.includes('__subtitleBridgePOCv114'), 'v1.0.14 interaction marker missing');
 assert(source.includes('data-subtitle-bridge-word'), 'word pointer marker missing');
-assert(source.includes('__sbStartSelection(n) && __sbLookupSelected()'), 'Magic Remote click must select and open lookup');
+assert(/__sbStartSelection\([A-Za-z_$][A-Za-z0-9_$]*\)\s*&&\s*__sbLookupSelected\(\)/.test(source), 'Magic Remote click must select and open lookup');
 assert(source.includes('__sbTranslationPhraseRange'), 'phrase highlight state missing');
 assert(source.includes('r.phraseMatch.startTokenIndex'), 'phrase start index must drive highlight');
 assert(source.includes('r.phraseMatch.endTokenIndex'), 'phrase end index must drive highlight');
