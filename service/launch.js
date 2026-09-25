@@ -8,6 +8,7 @@ var path = require('path');
 var childProcess = require('child_process');
 var url = require('url');
 var Service = require('webos-service');
+var mkvSubtitleExtractor = require('./mkv-subtitle-extractor');
 
 var service = new Service('com.pyaesone.stremiosb.server');
 var ready = false;
@@ -40,6 +41,32 @@ function probeTextSubtitleStreams(mediaUrl, callback) {
         subtitleProbeCache[mediaUrl] = { at: Date.now(), streams: streams };
         pruneCache(subtitleProbeCache, 8);
         callback(null, streams);
+    });
+}
+
+function normalizeMkvMediaUrl(mediaUrl) {
+    if (mediaUrl.charAt(0) === '/') return 'http://127.0.0.1:11470' + mediaUrl;
+    try {
+        var parsed = new url.URL(mediaUrl);
+        if ((parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') && parsed.port === '8080') parsed.port = '11470';
+        return parsed.toString();
+    } catch (_) { return mediaUrl; }
+}
+
+function serveMkvSubtitleCues(req, res) {
+    var query = url.parse(req.url, true).query || {};
+    var mediaUrl = typeof query.from === 'string' ? normalizeMkvMediaUrl(query.from) : '';
+    var trackOrdinal = parseInt(query.track, 10);
+    var time = parseFloat(query.time);
+    if (!/^https?:\/\//i.test(mediaUrl)) { res.writeHead(400, {'Content-Type':'application/json; charset=utf-8'}); return res.end(JSON.stringify({error:'Unsupported media URL'})); }
+    if (!isFinite(trackOrdinal) || trackOrdinal < 0) trackOrdinal = 0;
+    if (!isFinite(time) || time < 0) time = 0;
+    mkvSubtitleExtractor.extractWindow(mediaUrl, trackOrdinal, time).then(function(result) {
+        res.writeHead(200, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+        res.end(JSON.stringify(result));
+    }).catch(function(error) {
+        res.writeHead(502, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+        res.end(JSON.stringify({error:String(error && error.message || error || 'MKV extraction failed').slice(0,500)}));
     });
 }
 
@@ -128,6 +155,7 @@ function proxyToStreaming(req, res) {
 // Single server: static files first, then proxy to streaming server
 http.createServer(function(req, res) {
     var urlPath = req.url.split('?')[0];
+    if (req.method === 'GET' && urlPath === '/subtitle-bridge/mkv-cues') return serveMkvSubtitleCues(req, res);
     if (req.method === 'GET' && urlPath === '/subtitle-bridge/embedded.vtt') return serveEmbeddedSubtitleWindow(req, res);
     serveStatic(urlPath, res, function() { proxyToStreaming(req, res); });
 }).listen(8080, function() {
