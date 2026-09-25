@@ -130,8 +130,10 @@ class Element {
         this.tag = tag; this.style = {}; this.childNodes = []; this.textTracks = [];
         this.sheet = { insertRule() {} }; this.paused = false; this.readyState = 0;
         this.HAVE_METADATA = 1; this.mediaId = ''; this.buffered = { length: 0 };
-        this.operations = [];
+        this.operations = []; this.listeners = {};
     }
+    addEventListener(name, fn) { this.listeners[name] = fn; }
+    removeEventListener(name, fn) { if (this.listeners[name] === fn) delete this.listeners[name]; }
     appendChild(node) { this.childNodes.push(node); node.parentNode = this; }
     removeChild(node) { this.childNodes = this.childNodes.filter(item => item !== node); }
     set src(value) { this._src = value; this.operations.push(['src', value]); }
