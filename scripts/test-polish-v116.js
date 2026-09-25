@@ -12,7 +12,7 @@ assert(source.includes('window.__subtitleBridgeToggleDebug = __sbToggleDebug'), 
 assert(source.includes('403 === r || "ColorF0Red" === t'), 'red remote key debug toggle missing');
 assert(source.includes('Preparing interactive subtitles…'), 'selection loading status missing');
 assert(source.includes('__sbPendingSelectionUntil = s + 5e3'), 'bounded pending selection window missing');
-assert(source.includes('__sbFallbackEnd - 12'), 'MKV refresh must begin earlier for prefetch handoff');
+assert(source.includes('__sbFallbackEnd - 3'), 'short indexed cue window must refresh before expiry');
 assert(source.includes('__sbMaybeStartPendingSelection(), U()'), 'ready MKV refresh must complete a pending selection request');
 assert(source.includes('__sbArmPointerLayer'), 'Magic Remote pointer hit layer missing');
 assert(source.includes('__sbOverlay.style.opacity = "0.001"'), 'normal playback pointer layer should be visually invisible');

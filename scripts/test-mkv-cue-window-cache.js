@@ -46,6 +46,15 @@ async function main() {
     }
     assert(cache._entryCount() <= 4, 'cue cache must stay bounded');
 
-    console.log('PASS: MKV cue cache deduplicates in-flight extraction, reuses windows, prefetches ahead, and stays bounded');
+    const revisit = cacheModule.createMkvCueWindowCache(fakeExtract, { maxEntries: 64, ttlMs: 4 * 60 * 60 * 1000, bucketSeconds: 20 });
+    for (let time = 0; time < 800; time += 20) await revisit.load('http://example.test/long.mkv', 2, time);
+    const previousCalls = calls;
+    assert.strictEqual((await revisit.load('http://example.test/long.mkv', 2, 0)).cache, 'hit', 'previously visited movie area should remain immediate');
+    assert.strictEqual(calls, previousCalls);
+    const prefetched = revisit.prefetchNext('http://example.test/long.mkv', 2, 1000, { window: [992, 1032] });
+    revisit.cancelDistantPrefetch('http://example.test/long.mkv', 2, 2000);
+    assert.strictEqual(await prefetched, null, 'distant seek should cancel stale background prefetch');
+
+    console.log('PASS: MKV cue cache deduplicates, prefetches, retains visited areas, cancels stale prefetch, and stays bounded');
 }
 main().catch(function(error) { console.error(error); process.exitCode = 1; });

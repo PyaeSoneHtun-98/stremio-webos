@@ -7,6 +7,15 @@ function createMkvCueWindowCache(extractWindow, options) {
     var bucketSeconds = options.bucketSeconds || 20;
     var cache = Object.create(null);
     var inflight = Object.create(null);
+    var prefetches = Object.create(null);
+
+    function trackKey(mediaUrl, trackOrdinal) { return mediaUrl + '\n' + trackOrdinal; }
+    function createContext() {
+        return { cancelled: false, requests: [], cancel: function() {
+            this.cancelled = true;
+            this.requests.slice().forEach(function(request) { request.destroy(new Error('Subtitle request cancelled')); });
+        } };
+    }
 
     function key(mediaUrl, trackOrdinal, time) {
         return mediaUrl + '\n' + trackOrdinal + '\n' + Math.floor(Math.max(0, time) / bucketSeconds);
@@ -55,47 +64,67 @@ function createMkvCueWindowCache(extractWindow, options) {
         if (covering) return Promise.resolve({ result: covering, cache: 'hit' });
 
         var cacheKey = key(mediaUrl, trackOrdinal, time);
-        if (inflight[cacheKey]) {
+        if (!options.context && inflight[cacheKey]) {
             return inflight[cacheKey].then(function(result) {
                 return { result: result, cache: 'shared' };
             });
         }
 
         var promise = Promise.resolve()
-            .then(function() { return extractWindow(mediaUrl, trackOrdinal, time); })
+            .then(function() { return extractWindow(mediaUrl, trackOrdinal, time, options.context); })
             .then(function(result) {
+                if (options.context && options.context.cancelled) throw new Error('Subtitle request cancelled');
                 remember(cacheKey, mediaUrl, trackOrdinal, result);
-                delete inflight[cacheKey];
+                if (!options.context) delete inflight[cacheKey];
                 return result;
             }, function(error) {
-                delete inflight[cacheKey];
+                if (!options.context) delete inflight[cacheKey];
                 throw error;
             });
 
-        inflight[cacheKey] = promise;
+        if (!options.context) inflight[cacheKey] = promise;
         return promise.then(function(result) { return { result: result, cache: 'miss' }; });
     }
 
     function prefetchNext(mediaUrl, trackOrdinal, requestedTime, result) {
         var w = result && result.window;
         if (!Array.isArray(w) || !isFinite(Number(w[1]))) return Promise.resolve(null);
-        var nextTime = Math.max(Number(requestedTime) + 18, Number(w[1]) - 4);
+        var nextTime = Number(w[1]) + 2;
         if (!(nextTime > Number(requestedTime) + 8)) return Promise.resolve(null);
-        return load(mediaUrl, trackOrdinal, nextTime, { forceNew: true }).then(function(packet) {
+        var key = trackKey(mediaUrl, trackOrdinal), current = prefetches[key];
+        if (current && Math.abs(current.time - nextTime) < 8) return current.promise;
+        if (current) current.context.cancel();
+        var context = createContext();
+        var promise = load(mediaUrl, trackOrdinal, nextTime, { context: context }).then(function(packet) {
             return packet.result;
         }, function() {
             return null;
         });
+        prefetches[key] = { time: nextTime, context: context, promise: promise };
+        promise.then(function() { if (prefetches[key] && prefetches[key].promise === promise) delete prefetches[key]; });
+        return promise;
+    }
+
+    function cancelDistantPrefetch(mediaUrl, trackOrdinal, time) {
+        var key = trackKey(mediaUrl, trackOrdinal), current = prefetches[key];
+        if (current && Math.abs(current.time - time) > 30) {
+            current.context.cancel();
+            delete prefetches[key];
+        }
     }
 
     function clear() {
+        Object.keys(prefetches).forEach(function(key) { prefetches[key].context.cancel(); });
         cache = Object.create(null);
         inflight = Object.create(null);
+        prefetches = Object.create(null);
     }
 
     return {
         load: load,
+        peek: findCovering,
         prefetchNext: prefetchNext,
+        cancelDistantPrefetch: cancelDistantPrefetch,
         clear: clear,
         _entryCount: function() { return Object.keys(cache).length; },
         _inflightCount: function() { return Object.keys(inflight).length; }

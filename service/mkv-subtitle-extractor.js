@@ -6,10 +6,13 @@ var zlib = require('zlib');
 var URLCtor = require('url').URL;
 
 var HEAD_BYTES = 4 * 1024 * 1024;
+var INITIAL_HEAD_BYTES = 256 * 1024;
 var MAX_CUES_BYTES = 12 * 1024 * 1024;
 var MAX_CLUSTER_BYTES = 20 * 1024 * 1024;
+var MAX_SUBTITLE_BLOCK_BYTES = 64 * 1024;
 var TAIL_BYTES = 8 * 1024 * 1024;
 var metaCache = Object.create(null);
+var metaInflight = Object.create(null);
 
 function readId(buf, off) {
     if (off >= buf.length) return null;
@@ -150,9 +153,14 @@ function isTextSubtitle(track) {
     return c === 'S_TEXT/UTF8' || c === 'S_TEXT/ASS' || c === 'S_TEXT/SSA' || c === 'S_TEXT/WEBVTT';
 }
 
-function requestBuffer(target, start, end, redirects) {
+function cancelled(context) {
+    if (context && context.cancelled) throw new Error('Subtitle request cancelled');
+}
+
+function requestBuffer(target, start, end, redirects, context) {
     redirects = redirects || 0;
     return new Promise(function(resolve, reject) {
+        try { cancelled(context); } catch (error) { return reject(error); }
         var parsed;
         try { parsed = new URLCtor(target); } catch (e) { return reject(new Error('Invalid media URL')); }
         var client = parsed.protocol === 'https:' ? https : parsed.protocol === 'http:' ? http : null;
@@ -162,7 +170,7 @@ function requestBuffer(target, start, end, redirects) {
         var req = client.get(parsed, { headers: headers }, function(res) {
             if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects < 4) {
                 res.resume();
-                return resolve(requestBuffer(new URLCtor(res.headers.location, parsed).toString(), start, end, redirects + 1));
+                return resolve(requestBuffer(new URLCtor(res.headers.location, parsed).toString(), start, end, redirects + 1, context));
             }
             if (res.statusCode !== 200 && res.statusCode !== 206) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
             if (start > 0 && res.statusCode !== 206) { res.resume(); return reject(new Error('Range requests are not supported')); }
@@ -173,6 +181,7 @@ function requestBuffer(target, start, end, redirects) {
                 chunks.push(chunk);
             });
             res.on('end', function() {
+                try { cancelled(context); } catch (error) { return reject(error); }
                 var total = null, cr = String(res.headers['content-range'] || '');
                 var m = /\/(\d+)$/.exec(cr); if (m) total = parseInt(m[1], 10);
                 if (total === null && res.statusCode === 200 && res.headers['content-length']) total = parseInt(res.headers['content-length'], 10);
@@ -181,13 +190,24 @@ function requestBuffer(target, start, end, redirects) {
         });
         req.setTimeout(8000, function() { req.destroy(new Error('Range request timeout')); });
         req.on('error', reject);
+        if (context) {
+            context.requests = context.requests || [];
+            context.requests.push(req);
+            req.on('close', function() {
+                var i = context.requests.indexOf(req);
+                if (i >= 0) context.requests.splice(i, 1);
+            });
+            if (context.cancelled) req.destroy(new Error('Subtitle request cancelled'));
+        }
     });
 }
 
-function fetchRange(target, start, length) {
+function fetchRange(target, start, length, context) {
     var attempt = 0;
     function run() {
-        return requestBuffer(target, start, start + length - 1, 0).catch(function(error) {
+        cancelled(context);
+        return requestBuffer(target, start, start + length - 1, 0, context).catch(function(error) {
+            cancelled(context);
             attempt++;
             if (attempt >= 3) throw error;
             return new Promise(function(resolve) { setTimeout(resolve, 150 * attempt); }).then(run);
@@ -204,13 +224,20 @@ function findCuesMagic(buf) {
 function loadMetadata(target) {
     var cached = metaCache[target];
     if (cached && Date.now() - cached.at < 20 * 60 * 1000) return Promise.resolve(cached.value);
-    return fetchRange(target, 0, HEAD_BYTES).then(function(head) {
+    if (metaInflight[target]) return metaInflight[target];
+    var promise = fetchRange(target, 0, INITIAL_HEAD_BYTES).then(function(head) {
         var info = parseHeadBuffer(head.buffer, head.total);
+        if (info.tracks.length && (info.cuesAbsolute !== null || info.seekCuesAbsolute !== null || info.totalSize)) return info;
+        return fetchRange(target, 0, HEAD_BYTES).then(function(full) { return parseHeadBuffer(full.buffer, full.total); });
+    }).then(function(info) {
+        if (!info.tracks.length) throw new Error('Matroska subtitle tracks not found in header');
         metaCache[target] = { at: Date.now(), value: info };
         var keys = Object.keys(metaCache);
         if (keys.length > 8) keys.sort(function(a,b){ return metaCache[a].at - metaCache[b].at; }).slice(0, keys.length - 8).forEach(function(k){ delete metaCache[k]; });
         return info;
     });
+    metaInflight[target] = promise.then(function(value) { delete metaInflight[target]; return value; }, function(error) { delete metaInflight[target]; throw error; });
+    return metaInflight[target];
 }
 
 function parseCues(buf, absoluteBase, expectedRoot) {
@@ -229,12 +256,14 @@ function parseCues(buf, absoluteBase, expectedRoot) {
         eachChild(buf, point.dataStart, pe, function(ch, cp, ce) {
             if (ch.id === 0xB3) cueTime = readUInt(buf, ch.dataStart, ch.size);
             else if (ch.id === 0xB7) {
-                var tr = null, pos = null;
+                var tr = null, pos = null, relativePosition = null, duration = null;
                 eachChild(buf, ch.dataStart, ce, function(ph) {
                     if (ph.id === 0xF7) tr = readUInt(buf, ph.dataStart, ph.size);
                     else if (ph.id === 0xF1) pos = readUInt(buf, ph.dataStart, ph.size);
+                    else if (ph.id === 0xF0) relativePosition = readUInt(buf, ph.dataStart, ph.size);
+                    else if (ph.id === 0xB2) duration = readUInt(buf, ph.dataStart, ph.size);
                 });
-                if (pos !== null) positions.push({ track: tr, clusterPosition: pos });
+                if (pos !== null) positions.push({ track: tr, clusterPosition: pos, relativePosition: relativePosition, duration: duration });
             }
         });
         if (cueTime !== null && positions.length) out.push({ time: cueTime, positions: positions });
@@ -245,6 +274,7 @@ function parseCues(buf, absoluteBase, expectedRoot) {
 
 function loadCues(target, info) {
     if (info._cues) return Promise.resolve(info._cues);
+    if (info._cuesPromise) return info._cuesPromise;
     var abs = info.cuesAbsolute || info.seekCuesAbsolute;
     function loadAt(pos) {
         return fetchRange(target, pos, 64).then(function(first) {
@@ -261,7 +291,8 @@ function loadCues(target, info) {
         var len = Math.min(TAIL_BYTES, info.totalSize), start = info.totalSize - len;
         promise = fetchRange(target, start, len).then(function(tail) { return parseCues(tail.buffer, start, null); });
     } else promise = Promise.reject(new Error('Cues location unavailable'));
-    return promise.then(function(cues) { info._cues = cues; return cues; });
+    info._cuesPromise = promise.then(function(cues) { info._cues = cues; info._cuesPromise = null; return cues; }, function(error) { info._cuesPromise = null; throw error; });
+    return info._cuesPromise;
 }
 
 function decompress(track, payload) {
@@ -342,16 +373,16 @@ function chooseAnchors(cues, trackNumber, timeSec, timecodeScale) {
     return chosen;
 }
 
-function loadCluster(target, info, anchor, nextAnchor) {
+function loadCluster(target, info, anchor, nextAnchor, context) {
     var abs = info.segmentDataStart + anchor.clusterPosition;
-    return fetchRange(target, abs, 64).then(function(first) {
+    return fetchRange(target, abs, 64, context).then(function(first) {
         var h = headerAt(first.buffer, 0); if (!h || h.id !== 0x1F43B675) throw new Error('Cluster seek target is invalid');
         var need;
         if (!h.unknown) need = h.headerLength + h.size;
         else if (nextAnchor) need = (info.segmentDataStart + nextAnchor.clusterPosition) - abs;
         else need = MAX_CLUSTER_BYTES;
         if (need <= 0 || need > MAX_CLUSTER_BYTES) need = MAX_CLUSTER_BYTES;
-        return fetchRange(target, abs, need).then(function(full) { return full.buffer; });
+        return fetchRange(target, abs, need, context).then(function(full) { return full.buffer; });
     });
 }
 
@@ -369,7 +400,116 @@ function finalizeCues(cues, from, to) {
     return out;
 }
 
-function extractWindow(target, subtitleOrdinal, timeSec) {
+function indexedRows(cues, trackNumber, from, to, timecodeScale) {
+    var rows = [], previous = null, hasTarget = false;
+    cues.forEach(function(cue) {
+        cue.positions.forEach(function(position) {
+            if (position.track !== trackNumber) return;
+            hasTarget = true;
+            var row = { time: cue.time, timeSec: cue.time * timecodeScale / 1e9, position: position };
+            if (row.timeSec < from) {
+                if (!previous || row.timeSec > previous.timeSec) previous = row;
+            }
+            else if (row.timeSec <= to) rows.push(row);
+        });
+    });
+    if (previous && (previous.position.duration === null || previous.timeSec + previous.position.duration * timecodeScale / 1e9 >= from)) rows.unshift(previous);
+    rows.sort(function(a, b) { return a.timeSec - b.timeSec; });
+    if (!hasTarget || rows.length > 64 || rows.some(function(row) { return row.position.relativePosition === null; })) return null;
+    return rows;
+}
+
+function readIndexedCue(target, info, track, row, clusterHeaders, context) {
+    cancelled(context);
+    var clusterAbs = info.segmentDataStart + row.position.clusterPosition;
+    function readAt(headerLength) {
+        var blockAbs = clusterAbs + headerLength + row.position.relativePosition;
+        return fetchRange(target, blockAbs, 512, context).then(function(packet) {
+            var header = headerAt(packet.buffer, 0);
+            if (!header || (header.id !== 0xA0 && header.id !== 0xA3)) throw new Error('Indexed subtitle block is invalid');
+            var length = header.headerLength + header.size;
+            if (header.unknown || length > MAX_SUBTITLE_BLOCK_BYTES) throw new Error('Indexed subtitle block is too large');
+            if (packet.buffer.length >= length) return packet.buffer.slice(0, length);
+            return fetchRange(target, blockAbs, length, context).then(function(full) { return full.buffer; });
+        });
+    }
+    var headerPromise = clusterHeaders[clusterAbs];
+    function getHeader() {
+        if (!headerPromise) headerPromise = clusterHeaders[clusterAbs] = fetchRange(target, clusterAbs, 16, context).then(function(packet) {
+            var header = headerAt(packet.buffer, 0);
+            if (!header || header.id !== 0x1F43B675) throw new Error('Indexed Cluster position is invalid');
+            info.clusterHeaderLength = header.headerLength;
+            return header.headerLength;
+        });
+        return headerPromise;
+    }
+    var blockPromise = info.clusterHeaderLength ? readAt(info.clusterHeaderLength).catch(function() {
+        return getHeader().then(readAt);
+    }) : getHeader().then(readAt);
+    return blockPromise.then(function(buf) {
+        cancelled(context);
+        var outer = headerAt(buf, 0), block = null, duration = row.position.duration;
+        if (outer.id === 0xA3) block = { start: outer.dataStart, end: outer.dataStart + outer.size };
+        else eachChild(buf, outer.dataStart, outer.dataStart + outer.size, function(child, pos, end) {
+            if (child.id === 0xA1) block = { start: child.dataStart, end: end };
+            else if (child.id === 0x9B && duration === null) duration = readUInt(buf, child.dataStart, child.size);
+        });
+        if (!block) throw new Error('Indexed subtitle Block missing');
+        var trackVint = readVint(buf, block.start);
+        if (!trackVint || trackVint.value !== track.number) throw new Error('Indexed subtitle TrackNumber mismatch');
+        if (block.start + trackVint.length + 3 > block.end) throw new Error('Indexed subtitle Block truncated');
+        var relative = readSigned16(buf, block.start + trackVint.length);
+        var out = [];
+        parseBlock(buf, block.start, block.end, track, row.time - relative, info.timecodeScale, duration, out);
+        return out;
+    });
+}
+
+function extractIndexedWindow(target, info, track, rows, from, to, context) {
+    var collected = [], cursor = 1, clusterHeaders = Object.create(null);
+    if (!rows.length) return Promise.resolve({ trackNumber: track.number, codec: track.codec, cues: [], window: [from, to], method: 'indexed' });
+    function worker() {
+        cancelled(context);
+        var i = cursor++;
+        if (i >= rows.length) return Promise.resolve();
+        return readIndexedCue(target, info, track, rows[i], clusterHeaders, context).then(function(cues) {
+            Array.prototype.push.apply(collected, cues);
+            return worker();
+        });
+    }
+    return readIndexedCue(target, info, track, rows[0], clusterHeaders, context).then(function(first) {
+        Array.prototype.push.apply(collected, first);
+        return Promise.all([worker(), worker(), worker(), worker()]);
+    }).then(function() {
+        var out = finalizeCues(collected, from, to);
+        return { trackNumber: track.number, codec: track.codec, cues: out, window: [from, to], method: 'indexed' };
+    });
+}
+
+function extractActiveCue(target, subtitleOrdinal, timeSec, context) {
+    subtitleOrdinal = Math.max(0, parseInt(subtitleOrdinal, 10) || 0);
+    timeSec = Math.max(0, Number(timeSec) || 0);
+    return loadMetadata(target).then(function(info) {
+        var track = info.tracks.filter(isTextSubtitle)[subtitleOrdinal];
+        if (!track) throw new Error('No text subtitle track at ordinal ' + subtitleOrdinal);
+        return loadCues(target, info).then(function(cues) {
+            cancelled(context);
+            var rows = indexedRows(cues, track.number, timeSec - 0.01, timeSec, info.timecodeScale);
+            if (!rows) return extractWindow(target, subtitleOrdinal, timeSec, context);
+            var active = rows.filter(function(row) {
+                return row.timeSec <= timeSec && (row.position.duration === null || row.timeSec + row.position.duration * info.timecodeScale / 1e9 >= timeSec);
+            }).slice(-4);
+            if (!active.length) return { trackNumber: track.number, codec: track.codec, cues: [], window: [timeSec, timeSec + 1], method: 'active-indexed' };
+            var clusterHeaders = Object.create(null);
+            return Promise.all(active.map(function(row) { return readIndexedCue(target, info, track, row, clusterHeaders, context); })).then(function(results) {
+                var out = finalizeCues([].concat.apply([], results), timeSec - 0.01, timeSec + 0.01);
+                return { trackNumber: track.number, codec: track.codec, cues: out, window: [timeSec, timeSec + 1], method: 'active-indexed' };
+            });
+        });
+    });
+}
+
+function extractWindow(target, subtitleOrdinal, timeSec, context) {
     subtitleOrdinal = Math.max(0, parseInt(subtitleOrdinal, 10) || 0);
     timeSec = Math.max(0, Number(timeSec) || 0);
     return loadMetadata(target).then(function(info) {
@@ -377,23 +517,28 @@ function extractWindow(target, subtitleOrdinal, timeSec) {
         var track = textTracks[subtitleOrdinal];
         if (!track) throw new Error('No text subtitle track at ordinal ' + subtitleOrdinal);
         return loadCues(target, info).then(function(cues) {
+            cancelled(context);
+            var from = Math.max(0, timeSec - 2), to = timeSec + 7;
+            var rows = indexedRows(cues, track.number, from, to, info.timecodeScale);
+            if (rows) return extractIndexedWindow(target, info, track, rows, from, to, context);
             var anchors = chooseAnchors(cues, track.number, timeSec, info.timecodeScale);
             if (!anchors.length) throw new Error('No cluster anchors near requested time');
             var collected=[], cursor=0;
             function worker() {
                 var i=cursor++;
                 if (i >= anchors.length) return Promise.resolve();
-                return loadCluster(target, info, anchors[i], anchors[i+1]).then(function(buf) {
+                cancelled(context);
+                return loadCluster(target, info, anchors[i], anchors[i+1], context).then(function(buf) {
                     parseCluster(buf, track, info.timecodeScale, collected);
                 }).then(worker);
             }
             return Promise.all([worker(), worker()]).then(function() {
                 var from=Math.max(0,timeSec-8), to=timeSec+32, cuesOut=finalizeCues(collected,from,to);
                 if (!cuesOut.length) throw new Error('No subtitle cues found near ' + timeSec.toFixed(1) + 's');
-                return { trackNumber: track.number, codec: track.codec, cues: cuesOut, window: [from,to] };
+                return { trackNumber: track.number, codec: track.codec, cues: cuesOut, window: [from,to], method: 'cluster' };
             });
         });
     });
 }
 
-module.exports = { extractWindow: extractWindow, _parseHeadBuffer: parseHeadBuffer, _parseCues: parseCues };
+module.exports = { extractWindow: extractWindow, extractActiveCue: extractActiveCue, _parseHeadBuffer: parseHeadBuffer, _parseCues: parseCues };

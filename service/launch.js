@@ -9,7 +9,7 @@ var childProcess = require('child_process');
 var url = require('url');
 var Service = require('webos-service');
 var mkvSubtitleExtractor = require('./mkv-subtitle-extractor');
-var mkvCueWindowCache = require('./mkv-cue-window-cache').createMkvCueWindowCache(mkvSubtitleExtractor.extractWindow, { maxEntries: 12, ttlMs: 3 * 60 * 1000, bucketSeconds: 20 });
+var mkvCueWindowCache = require('./mkv-cue-window-cache').createMkvCueWindowCache(mkvSubtitleExtractor.extractWindow, { maxEntries: 2048, ttlMs: 4 * 60 * 60 * 1000, bucketSeconds: 20 });
 var dictionaryProvider = require('./dictionary-provider');
 
 var service = new Service('com.pyaesone.stremiosb.server');
@@ -20,6 +20,7 @@ var ffmpegBin = path.join(__dirname, 'bin', 'ffmpeg');
 var ffprobeBin = path.join(__dirname, 'bin', 'ffprobe');
 var subtitleProbeCache = Object.create(null);
 var subtitleWindowCache = Object.create(null);
+var activeCueCache = Object.create(null);
 var BITMAP_SUBTITLE_CODECS = { hdmv_pgs_subtitle: true, dvd_subtitle: true, dvb_subtitle: true, xsub: true };
 
 function pruneCache(cache, maxEntries) {
@@ -91,7 +92,14 @@ function serveMkvSubtitleCues(req, res) {
     if (!isFinite(trackOrdinal) || trackOrdinal < 0) trackOrdinal = 0;
     if (!isFinite(time) || time < 0) time = 0;
 
-    mkvCueWindowCache.load(mediaUrl, trackOrdinal, time).then(function(packet) {
+    mkvCueWindowCache.cancelDistantPrefetch(mediaUrl, trackOrdinal, time);
+    var context = { cancelled: false, requests: [], cancel: function() {
+        this.cancelled = true;
+        this.requests.slice().forEach(function(request) { request.destroy(new Error('Subtitle request cancelled')); });
+    } };
+    res.once('close', function() { if (!res.writableEnded) context.cancel(); });
+    mkvCueWindowCache.load(mediaUrl, trackOrdinal, time, { context: context }).then(function(packet) {
+        if (context.cancelled) return;
         var result = packet.result;
         res.writeHead(200, {
             'Content-Type':'application/json; charset=utf-8',
@@ -103,8 +111,55 @@ function serveMkvSubtitleCues(req, res) {
             mkvCueWindowCache.prefetchNext(mediaUrl, trackOrdinal, time, result);
         }, 0);
     }).catch(function(error) {
+        if (context.cancelled) return;
         res.writeHead(502, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
         res.end(JSON.stringify({error:String(error && error.message || error || 'MKV extraction failed').slice(0,500)}));
+    });
+}
+
+function serveMkvActiveCue(req, res) {
+    var query = url.parse(req.url, true).query || {};
+    var mediaUrl = typeof query.from === 'string' ? normalizeMkvMediaUrl(query.from) : '';
+    var trackOrdinal = parseInt(query.track, 10);
+    var time = parseFloat(query.time);
+    if (!/^https?:\/\//i.test(mediaUrl)) { res.writeHead(400, {'Content-Type':'application/json; charset=utf-8'}); return res.end(JSON.stringify({error:'Unsupported media URL'})); }
+    if (!isFinite(trackOrdinal) || trackOrdinal < 0) trackOrdinal = 0;
+    if (!isFinite(time) || time < 0) time = 0;
+    var cached = mkvCueWindowCache.peek(mediaUrl, trackOrdinal, time);
+    if (cached) {
+        res.writeHead(200, {'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store', 'X-Subtitle-Bridge-Cache':'hit'});
+        return res.end(JSON.stringify({ trackNumber: cached.trackNumber, codec: cached.codec,
+            cues: cached.cues.filter(function(cue) { return cue.startTime <= time && time <= cue.endTime; }),
+            window: [time, time + 1], method: 'active-cache' }));
+    }
+    var activeKeys = Object.keys(activeCueCache);
+    for (var i = 0; i < activeKeys.length; i++) {
+        var entry = activeCueCache[activeKeys[i]];
+        if (entry.mediaUrl === mediaUrl && entry.trackOrdinal === trackOrdinal && Date.now() - entry.at < 4 * 60 * 60 * 1000 && entry.from <= time && time <= entry.to) {
+            entry.at = Date.now();
+            res.writeHead(200, {'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store', 'X-Subtitle-Bridge-Cache':'active-hit'});
+            return res.end(JSON.stringify(entry.result));
+        }
+    }
+    var context = { cancelled: false, requests: [], cancel: function() {
+        this.cancelled = true;
+        this.requests.slice().forEach(function(request) { request.destroy(new Error('Subtitle request cancelled')); });
+    } };
+    res.once('close', function() { if (!res.writableEnded) context.cancel(); });
+    mkvSubtitleExtractor.extractActiveCue(mediaUrl, trackOrdinal, time, context).then(function(result) {
+        if (context.cancelled) return;
+        var first = result.cues[0], last = result.cues[result.cues.length - 1];
+        activeCueCache[mediaUrl + '\n' + trackOrdinal + '\n' + (first ? first.startTime : time)] = {
+            at: Date.now(), mediaUrl: mediaUrl, trackOrdinal: trackOrdinal,
+            from: first ? first.startTime : time, to: last ? last.endTime : time + 0.5, result: result
+        };
+        pruneCache(activeCueCache, 2048);
+        res.writeHead(200, {'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store'});
+        res.end(JSON.stringify(result));
+    }).catch(function(error) {
+        if (context.cancelled) return;
+        res.writeHead(502, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+        res.end(JSON.stringify({error:String(error && error.message || error || 'Active cue extraction failed').slice(0,500)}));
     });
 }
 
@@ -195,6 +250,7 @@ http.createServer(function(req, res) {
     var urlPath = req.url.split('?')[0];
     if (req.method === 'GET' && urlPath === '/subtitle-bridge/lookup') return serveDictionaryLookup(req, res);
     if (req.method === 'GET' && urlPath === '/subtitle-bridge/mkv-cues') return serveMkvSubtitleCues(req, res);
+    if (req.method === 'GET' && urlPath === '/subtitle-bridge/mkv-active-cue') return serveMkvActiveCue(req, res);
     if (req.method === 'GET' && urlPath === '/subtitle-bridge/embedded.vtt') return serveEmbeddedSubtitleWindow(req, res);
     serveStatic(urlPath, res, function() { proxyToStreaming(req, res); });
 }).listen(8080, function() {

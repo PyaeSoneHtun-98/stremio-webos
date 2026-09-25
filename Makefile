@@ -70,6 +70,7 @@ build: service/server.js service/bin/ffmpeg service/bin/ffprobe service/data/dic
 	@node scripts/apply-interactions-v114.js service/www/video.chunk.js
 	@node scripts/apply-word-tokenizer-v115.js service/www/video.chunk.js
 	@node scripts/apply-polish-v116.js service/www/video.chunk.js
+	@node scripts/apply-indexed-mkv-v117.js service/www/video.chunk.js
 	@grep -q '__subtitleBridgePOCv108' service/www/video.chunk.js
 	@grep -q '__subtitleBridgePOCv111' service/www/video.chunk.js
 	@grep -q '__subtitleBridgePOCv112' service/www/video.chunk.js
@@ -77,6 +78,7 @@ build: service/server.js service/bin/ffmpeg service/bin/ffprobe service/data/dic
 	@grep -q '__subtitleBridgePOCv114' service/www/video.chunk.js
 	@grep -q '__subtitleBridgePOCv115' service/www/video.chunk.js
 	@grep -q '__subtitleBridgePOCv116' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv117' service/www/video.chunk.js
 	@grep -q 'data-subtitle-bridge-external-word' service/www/video.chunk.js
 	@echo "==> Build complete"
 
@@ -93,6 +95,7 @@ test: build
 	@node scripts/test-tv-word-tokenizer-v115.js service/www/video.chunk.js
 	@node scripts/test-mkv-cue-window-cache.js
 	@node scripts/test-polish-v116.js service/www/video.chunk.js
+	@node scripts/test-indexed-mkv-v117.js service/www/video.chunk.js
 
 package: test
 	@rm -f $(IPK)
