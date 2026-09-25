@@ -48,9 +48,10 @@ function createMkvCueWindowCache(extractWindow, options) {
         prune();
     }
 
-    function load(mediaUrl, trackOrdinal, time) {
+    function load(mediaUrl, trackOrdinal, time, options) {
         time = Math.max(0, Number(time) || 0);
-        var covering = findCovering(mediaUrl, trackOrdinal, time);
+        options = options || {};
+        var covering = options.forceNew ? null : findCovering(mediaUrl, trackOrdinal, time);
         if (covering) return Promise.resolve({ result: covering, cache: 'hit' });
 
         var cacheKey = key(mediaUrl, trackOrdinal, time);
@@ -78,9 +79,9 @@ function createMkvCueWindowCache(extractWindow, options) {
     function prefetchNext(mediaUrl, trackOrdinal, requestedTime, result) {
         var w = result && result.window;
         if (!Array.isArray(w) || !isFinite(Number(w[1]))) return Promise.resolve(null);
-        var nextTime = Math.max(Number(requestedTime) + 18, Number(w[1]) - 6);
+        var nextTime = Math.max(Number(requestedTime) + 18, Number(w[1]) - 4);
         if (!(nextTime > Number(requestedTime) + 8)) return Promise.resolve(null);
-        return load(mediaUrl, trackOrdinal, nextTime).then(function(packet) {
+        return load(mediaUrl, trackOrdinal, nextTime, { forceNew: true }).then(function(packet) {
             return packet.result;
         }, function() {
             return null;
