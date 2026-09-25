@@ -64,7 +64,7 @@ const uiHelpers = [
 '                    (__sbLastCueText !== e || !__sbWords.length) && __sbRender(e), __sbPointerLayerActive = __sbWords.length > 0, __sbPointerLayerActive && (__sbOverlay.style.opacity = "0.001", __sbOverlay.style.display = "block")',
 '                }',
 '',
-].join('\\n');
+].join('\n');
 
 replaceOnce(
     'status/debug helper insertion',
