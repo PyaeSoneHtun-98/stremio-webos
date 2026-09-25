@@ -91,13 +91,13 @@ replaceOnce(
 );
 
 replaceOnce(
-    replaceOnce(
     'selection reveals pointer layer',
     '__sbSelecting || (__sbWasPaused = !!A.paused, A.paused || A.pause(), __sbSelecting = !0, window.__subtitleBridgeEmbeddedActive = !0, __sbSetNativeSubtitleEnabled(!1)), __sbSetSelected("number" == typeof e ? e : 0), !0',
     '__sbSelecting || (__sbWasPaused = !!A.paused, A.paused || A.pause(), __sbSelecting = !0, __sbPointerLayerActive = !1, __sbOverlay.style.opacity = Math.max(0, Math.min(1, (_ || 100) / 100)), window.__subtitleBridgeEmbeddedActive = !0, __sbSetNativeSubtitleEnabled(!1)), __sbSetSelected("number" == typeof e ? e : 0), !0',
 );
 
-'Magic Remote hover polish',
+replaceOnce(
+    'Magic Remote hover polish',
     '__sbSelecting ? __sbSetSelected(i) : n.style.outline = "1px solid rgba(255,255,255,.65)"\n                            }, n.onmouseleave = function() {\n                                __sbSelecting || (n.style.outline = "none")',
     '__sbSelecting ? __sbSetSelected(i) : (n.style.backgroundColor = "rgba(181,230,209,.22)", n.style.borderRadius = "5px")\n                            }, n.onmouseleave = function() {\n                                __sbSelecting || (n.style.outline = "none", n.style.backgroundColor = n.__sbBaseBackground, n.style.borderRadius = "0")',
 );
