@@ -138,7 +138,12 @@ const helpers = `                function __sbTranslationMake(e, r) {
                     }))
                 }
 
-                function __sbPlainText(e) {`;
+                function __sbPlainText(e) {
+                    var t = document.createElement("div");
+                    return t.innerHTML = String(e || "").replace(/<br[^>]*>/gi, "\\n"), (t.textContent || t.innerText || "").replace(/\\r/g, "")
+                }
+
+`;
 
 replaceSection(
     'translation popup helpers',
