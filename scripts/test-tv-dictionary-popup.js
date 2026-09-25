@@ -17,7 +17,7 @@ assert(source.includes('__sbTranslationOpen'), 'translation popup state missing'
 assert(source.includes('__sbDismissTranslation(), __sbSelecting = !1'), 'selection exit must dismiss translation popup');
 
 const keyStart = source.indexOf('function __sbKeydown(e)');
-const keyEnd = source.indexOf('window.addEventListener("keydown", __sbKeydown, !0);', keyStart);
+const keyEnd = source.indexOf('window.addEventListener("keydown", __sbKeydown, !0)', keyStart);
 assert(keyStart >= 0 && keyEnd > keyStart, 'keydown integration missing');
 const keydown = source.slice(keyStart, keyEnd);
 const translationBranch = keydown.indexOf('if (__sbTranslationOpen)');
