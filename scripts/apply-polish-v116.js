@@ -26,8 +26,8 @@ replaceOnce(
 
 replaceOnce(
     'debug/status UI',
-    '__sbDebug.textContent = "SB POC loaded", t.appendChild(__sbDebug), window.__subtitleBridgeWebOSPOC = window.__subtitleBridgeWebOSPOC || {}, window.__subtitleBridgeEmbeddedActive = !1;',
-    '__sbDebug.textContent = "Subtitle Bridge debug", __sbDebug.style.display = "none", t.appendChild(__sbDebug), __sbStatus.setAttribute("data-subtitle-bridge-status", "1"), __sbStatus.style.position = "absolute", __sbStatus.style.left = "50%", __sbStatus.style.bottom = "23%", __sbStatus.style.transform = "translateX(-50%)", __sbStatus.style.zIndex = "130", __sbStatus.style.padding = "9px 14px", __sbStatus.style.border = "1px solid rgba(181,230,209,.22)", __sbStatus.style.borderRadius = "999px", __sbStatus.style.background = "rgba(10,18,24,.9)", __sbStatus.style.color = "#d9eee4", __sbStatus.style.font = "600 14px/1.25 sans-serif", __sbStatus.style.boxShadow = "0 8px 28px rgba(0,0,0,.35)", __sbStatus.style.pointerEvents = "none", __sbStatus.style.display = "none", t.appendChild(__sbStatus), window.__subtitleBridgeWebOSPOC = window.__subtitleBridgeWebOSPOC || {}, window.__subtitleBridgeEmbeddedActive = !1;',
+    '__sbDebug.textContent = "SB POC loaded", t.appendChild(__sbDebug),',
+    '__sbDebug.textContent = "Subtitle Bridge debug", __sbDebug.style.display = "none", t.appendChild(__sbDebug), __sbStatus.setAttribute("data-subtitle-bridge-status", "1"), __sbStatus.style.position = "absolute", __sbStatus.style.left = "50%", __sbStatus.style.bottom = "23%", __sbStatus.style.transform = "translateX(-50%)", __sbStatus.style.zIndex = "130", __sbStatus.style.padding = "9px 14px", __sbStatus.style.border = "1px solid rgba(181,230,209,.22)", __sbStatus.style.borderRadius = "999px", __sbStatus.style.background = "rgba(10,18,24,.9)", __sbStatus.style.color = "#d9eee4", __sbStatus.style.font = "600 14px/1.25 sans-serif", __sbStatus.style.boxShadow = "0 8px 28px rgba(0,0,0,.35)", __sbStatus.style.pointerEvents = "none", __sbStatus.style.display = "none", t.appendChild(__sbStatus),',
 );
 
 replaceOnce('debug prefix', '"SB POC | key:" + __sbLastKey', '"Subtitle Bridge | key:" + __sbLastKey');
