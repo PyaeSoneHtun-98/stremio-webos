@@ -9,6 +9,7 @@ var childProcess = require('child_process');
 var url = require('url');
 var Service = require('webos-service');
 var mkvSubtitleExtractor = require('./mkv-subtitle-extractor');
+var dictionaryProvider = require('./dictionary-provider');
 
 var service = new Service('com.pyaesone.stremiosb.server');
 var ready = false;
@@ -51,6 +52,33 @@ function normalizeMkvMediaUrl(mediaUrl) {
         if ((parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost') && parsed.port === '8080') parsed.port = '11470';
         return parsed.toString();
     } catch (_) { return mediaUrl; }
+}
+
+function serveDictionaryLookup(req, res) {
+    var query = url.parse(req.url, true).query || {};
+    var word = typeof query.word === 'string' ? query.word.slice(0, 160) : '';
+    var clickedTokenIndex = parseInt(query.index, 10);
+    var contextTokens = [];
+    if (typeof query.tokens === 'string' && query.tokens.length <= 4096) {
+        try {
+            var parsedTokens = JSON.parse(query.tokens);
+            if (Array.isArray(parsedTokens)) {
+                contextTokens = parsedTokens.slice(0, 32).map(function(token) { return String(token || '').slice(0, 120); });
+            }
+        } catch (_) {}
+    }
+    if (!isFinite(clickedTokenIndex)) clickedTokenIndex = -1;
+    try {
+        var result = dictionaryProvider.lookup(word, contextTokens, clickedTokenIndex);
+        res.writeHead(200, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+        res.end(JSON.stringify(result ? {found:true,result:result} : {
+            found:false,
+            error:'No offline Burmese translation is available for “' + word + '” yet.'
+        }));
+    } catch (error) {
+        res.writeHead(500, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+        res.end(JSON.stringify({found:false,error:String(error && error.message || error || 'Dictionary lookup failed').slice(0,500)}));
+    }
 }
 
 function serveMkvSubtitleCues(req, res) {
@@ -155,6 +183,7 @@ function proxyToStreaming(req, res) {
 // Single server: static files first, then proxy to streaming server
 http.createServer(function(req, res) {
     var urlPath = req.url.split('?')[0];
+    if (req.method === 'GET' && urlPath === '/subtitle-bridge/lookup') return serveDictionaryLookup(req, res);
     if (req.method === 'GET' && urlPath === '/subtitle-bridge/mkv-cues') return serveMkvSubtitleCues(req, res);
     if (req.method === 'GET' && urlPath === '/subtitle-bridge/embedded.vtt') return serveEmbeddedSubtitleWindow(req, res);
     serveStatic(urlPath, res, function() { proxyToStreaming(req, res); });
