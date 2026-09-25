@@ -104,7 +104,7 @@ function keyHarness(external) {
     let starts = 0, available = true;
     const context = {
         Date: { now: () => 10000 }, U: () => {}, __sbLastKey: '',
-        __sbSelecting: false, __sbUpPrimedUntil: 0,
+        __sbSelecting: false, __sbUpPrimedUntil: 0, __sbTranslationOpen: false,
         __sbExtSelecting: false, __sbExtUpPrimedUntil: 0,
         __sbStartSelection: () => { starts++; return available; },
         __sbExtStart: () => { starts++; return available; }
