@@ -101,13 +101,17 @@ function keyHarness(external) {
     const name = external ? '__sbExtKeydown' : '__sbKeydown';
     const start = source.indexOf('function ' + name + '(e)');
     const end = source.indexOf('window.addEventListener("keydown", ' + name, start);
-    let starts = 0, available = true;
+    let starts = 0, available = true, extractionStarts = 0, status = '';
     const context = {
         Date: { now: () => 10000 }, U: () => {}, __sbLastKey: '',
         __sbSelecting: false, __sbUpPrimedUntil: 0, __sbTranslationOpen: false,
+        __sbPendingSelectionUntil: 0, __sbSelectionWaitUntil: 0,
         __sbExtSelecting: false, __sbExtUpPrimedUntil: 0,
         __sbStartSelection: () => { starts++; return available; },
-        __sbExtStart: () => { starts++; return available; }
+        __sbExtStart: () => { starts++; return available; },
+        __sbSetStatus: value => { status = value; },
+        __sbEnsureFallback: () => { extractionStarts++; },
+        __sbToggleDebug: () => {}
     };
     vm.createContext(context); vm.runInContext(source.slice(start, end), context);
     function up(repeat = false) {
@@ -119,7 +123,17 @@ function keyHarness(external) {
     assert.equal(up(true), false); assert.equal(starts, 0, 'held Up is not a second press');
     assert.equal(up(), true); assert.equal(starts, 1);
     available = false;
-    assert.equal(up(), false); assert.equal(up(), false, 'no cue must not swallow navigation or start extraction');
+    assert.equal(up(), false);
+    if (external) {
+        assert.equal(up(), false, 'external no-cue path must keep navigation unchanged');
+        assert.equal(extractionStarts, 0);
+    } else {
+        assert.equal(up(), true, 'embedded second Up should wait for interactive subtitle extraction');
+        assert.equal(extractionStarts, 1, 'embedded pending selection should start or join extraction');
+        assert.equal(status, 'Preparing interactive subtitles…');
+        assert.equal(context.__sbPendingSelectionUntil, 15000);
+        assert.equal(context.__sbSelectionWaitUntil, 15000);
+    }
 }
 keyHarness(false); keyHarness(true);
 
