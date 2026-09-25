@@ -38,9 +38,9 @@ replaceOnce(
     '__sbFallbackCodec = String(i.codec || ""), __sbCueSource = "mkv", __sbMaybeStartPendingSelection(), U()',
 );
 replaceOnce(
-    'pending selection completion',
-    'e && (__sbPendingSelectionUntil = 0, __sbStartSelection(0))',
-    'e && (__sbPendingSelectionUntil = 0, __sbSelectionWaitUntil = 0, __sbSetStatus(""), __sbStartSelection(0))',
+    'restore bounded pending selection helper',
+    'function __sbMaybeStartPendingSelection() {}',
+    'function __sbMaybeStartPendingSelection() { if (__sbPendingSelectionUntil && Date.now() <= __sbPendingSelectionUntil) { var e = __sbCurrentCueText(); e && (__sbPendingSelectionUntil = 0, __sbSelectionWaitUntil = 0, __sbSetStatus(""), __sbStartSelection(0)) } }',
 );
 
 const uiHelpers = [
