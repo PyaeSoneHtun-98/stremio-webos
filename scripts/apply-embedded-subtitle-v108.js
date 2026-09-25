@@ -62,7 +62,9 @@ section('                        case "selectedSubtitlesTrackId":', '           
 section('                function __sbSetNativeSubtitleEnabled(e) {', '                function __sbResetFallback(e) {',
     '                function __sbSetNativeSubtitleEnabled(e) { __sbLifecycle.enable(!!e) }\n\n');
 replace('A.src = D.url, i = function() {', 'A.src = D.url, __sbLifecycle.start(), i = function() {');
-replace('D = r.stream, C = r.time, G("stream"), A.autoplay', 'H("unload"), D = r.stream, C = r.time, G("stream"), A.autoplay');
+// Preserve Vidaa's load path: calling H("unload") here removes src and calls
+// A.load() on an empty source before the new URL, disrupting the LG pipeline.
+// Teardown remains exclusively in the explicit unload/destroy command paths.
 replace('if (A.mediaId) return clearInterval(a), F(), g(), void i();', 'if (A.mediaId && A.mediaId !== "<invalid mediaId>") return __sbEnsureNativeCueTap(), clearInterval(a), F(), g(), void i();');
 replace('}, a = setInterval((function() {\n                                    if (A.mediaId', '}, a = __sbLoadTimer = setInterval((function() {\n                                    if (A.mediaId');
 replace('__sbExitSelection(!1), __sbRender(""), __sbResetFallback(!1), __sbStopNativeCueTap(),',

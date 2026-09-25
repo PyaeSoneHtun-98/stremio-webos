@@ -1,5 +1,26 @@
 # Embedded subtitles: first-load lifecycle repair
 
+## v1.0.9 playback regression correction
+
+The v1.0.8 patch incorrectly inserted `H("unload")` at the beginning of WebOsVideo
+load. The user reports that the same Bleach stream which played in v1.0.7 now
+reports an unsupported stream. The inserted unload removes the video source and
+calls `load()` before assigning the new source. It has been removed; the original
+stream assignment and delayed native load/play order are preserved. Explicit
+unload/destroy cleanup and the subtitle lifecycle improvements remain intact.
+
+The previous DOM test stub ignored `removeAttribute()` and `load()`, so it could
+not detect this regression. The test now records source operations and checks
+their order, URL preservation, stream object identity, and autoplay. It fails on
+the v1.0.8 generated bundle and passes on the corrected bundle. A separate final
+bundle assertion rejects unload/source removal in the WebOsVideo load branch.
+Both checks run before CI packaging.
+
+The actual Bleach URL is unavailable in the repository/conversation. CI uses a
+clearly synthetic direct MKV fixture, with an optional
+`SUBTITLE_BRIDGE_TEST_STREAM_URL` environment override for local dispatch testing.
+These tests do not fetch/decode the stream and do not claim real-TV validation.
+
 Baseline: `f7d9bad57161dde5c0260ee8775e408e66e99249` on
 `feat/issue-1-embedded-subtitle-cue-poc`. No TV install was performed for this change.
 

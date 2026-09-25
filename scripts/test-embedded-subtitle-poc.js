@@ -4,6 +4,14 @@ const assert = require('assert');
 const vm = require('vm');
 const source = fs.readFileSync(process.argv[2], 'utf8');
 new vm.Script(source);
+const commandStart = source.indexOf('                function H(e, r) {');
+const loadStart = source.indexOf('case "load":', commandStart);
+const loadEnd = source.indexOf('case "unload":', loadStart);
+assert(commandStart >= 0 && loadStart > commandStart && loadEnd > loadStart);
+const loadPath = source.slice(loadStart, loadEnd);
+assert(!loadPath.includes('H("unload")'), 'WebOsVideo load must not invoke unload');
+assert(!loadPath.includes('removeAttribute'), 'WebOsVideo load must not remove the source');
+assert(loadPath.includes('D = r.stream, C = r.time, G("stream"), A.autoplay'), 'Original stream assignment must remain unchanged');
 for (const marker of ['data-subtitle-bridge-poc', '__subtitleBridgePOCv108', 'data-subtitle-bridge-external-word']) {
     assert(source.includes(marker), 'Missing integration marker: ' + marker);
 }

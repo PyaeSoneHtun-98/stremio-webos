@@ -130,10 +130,16 @@ class Element {
         this.tag = tag; this.style = {}; this.childNodes = []; this.textTracks = [];
         this.sheet = { insertRule() {} }; this.paused = false; this.readyState = 0;
         this.HAVE_METADATA = 1; this.mediaId = ''; this.buffered = { length: 0 };
+        this.operations = [];
     }
     appendChild(node) { this.childNodes.push(node); node.parentNode = this; }
     removeChild(node) { this.childNodes = this.childNodes.filter(item => item !== node); }
-    setAttribute() {} removeAttribute() {} load() {} play() { this.paused = false; }
+    set src(value) { this._src = value; this.operations.push(['src', value]); }
+    get src() { return this._src; }
+    setAttribute() {}
+    removeAttribute(name) { this.operations.push(['removeAttribute', name]); }
+    load() { this.operations.push(['load', this.src]); }
+    play() { this.operations.push(['play', this.src]); this.paused = false; }
     pause() { this.paused = true; }
 }
 const elements = [], nativeCalls = [], adapterTimers = new Map();
@@ -157,11 +163,24 @@ const constructorEnd = source.indexOf('            m.canPlayStream', constructor
 assert(constructorStart >= 0 && constructorEnd > constructorStart);
 vm.runInContext(source.slice(constructorStart, constructorEnd), adapterContext);
 const adapter = new adapterContext.m({ containerElement: new Element('div') });
-adapter.dispatch({ type: 'command', commandName: 'load', commandArgs: { stream: { url: 'https://example.test/movie.mkv' } } });
-adapter.dispatch({ type: 'setProp', propName: 'selectedSubtitlesTrackId', propValue: 'EMBEDDED_2' });
+// The actual private Bleach URL is not stored in this repository. Accept it from
+// the environment for local replay; CI uses an explicit synthetic direct-MKV URL.
+// Neither fixture is fetched: this regression checks lossless load dispatch.
+const directUrl = process.env.SUBTITLE_BRIDGE_TEST_STREAM_URL || 'https://example.test/Bleach.S04E08.mkv?token=a%2Fb%2Bc&download=1';
+const directStream = { url: directUrl, name: 'Bleach', behaviorHints: { notWebReady: true } };
+adapter.dispatch({ type: 'command', commandName: 'load', commandArgs: { stream: directStream, time: 287000, autoplay: false } });
 const video = elements.find(element => element.tag === 'video');
+assert.deepEqual(video.operations, [['src', directUrl]], 'load must assign the direct URL without prior unload/removeAttribute/load');
+assert.strictEqual(video.src, directUrl, 'direct stream URL must not be rewritten');
+assert.strictEqual(video.autoplay, false);
+let observedStream;
+adapter.on('propValue', (name, value) => { if (name === 'stream') observedStream = value; });
+adapter.dispatch({ type: 'observeProp', propName: 'stream' });
+assert.strictEqual(observedStream, directStream, 'original stream must reach WebOsVideo unchanged');
+adapter.dispatch({ type: 'setProp', propName: 'selectedSubtitlesTrackId', propValue: 'EMBEDDED_2' });
 video.mediaId = 'early';
 Array.from(adapterTimers.values()).forEach(fn => fn());
+assert.deepEqual(video.operations, [['src', directUrl], ['load', directUrl], ['play', directUrl]], 'preserve original delayed WebOsVideo load/play order');
 assert.equal(video.readyState, 0);
 assert.equal(nativeCalls[0].method, 'subscribe');
 assert.equal(nativeCalls.find(call => call.method === 'selectTrack').parameters.index, 2);
@@ -169,6 +188,7 @@ nativeCalls.find(call => call.method === 'selectTrack').onSuccess({});
 Array.from(adapterTimers.values()).forEach(fn => fn());
 assert.equal(nativeCalls.find(call => call.method === 'setSubtitleEnable').parameters.enable, true);
 adapter.dispatch({ type: 'command', commandName: 'unload' });
+assert.deepEqual(video.operations.slice(-2), [['removeAttribute', 'src'], ['load', directUrl]], 'explicit unload must still tear down the source');
 assert.equal(adapterTimers.size, 0, 'unload must stop lifecycle AND legacy load polling');
 adapter.dispatch({ type: 'command', commandName: 'destroy' });
 console.log('PASS: early mediaId, select/enable retries, silence, off, stale callbacks, reopen, retry bounds, both ArrowUp handlers');
