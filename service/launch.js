@@ -9,6 +9,7 @@ var childProcess = require('child_process');
 var url = require('url');
 var Service = require('webos-service');
 var mkvSubtitleExtractor = require('./mkv-subtitle-extractor');
+var mkvCueWindowCache = require('./mkv-cue-window-cache').createMkvCueWindowCache(mkvSubtitleExtractor.extractWindow, { maxEntries: 12, ttlMs: 3 * 60 * 1000, bucketSeconds: 20 });
 var dictionaryProvider = require('./dictionary-provider');
 
 var service = new Service('com.pyaesone.stremiosb.server');
@@ -89,9 +90,18 @@ function serveMkvSubtitleCues(req, res) {
     if (!/^https?:\/\//i.test(mediaUrl)) { res.writeHead(400, {'Content-Type':'application/json; charset=utf-8'}); return res.end(JSON.stringify({error:'Unsupported media URL'})); }
     if (!isFinite(trackOrdinal) || trackOrdinal < 0) trackOrdinal = 0;
     if (!isFinite(time) || time < 0) time = 0;
-    mkvSubtitleExtractor.extractWindow(mediaUrl, trackOrdinal, time).then(function(result) {
-        res.writeHead(200, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+
+    mkvCueWindowCache.load(mediaUrl, trackOrdinal, time).then(function(packet) {
+        var result = packet.result;
+        res.writeHead(200, {
+            'Content-Type':'application/json; charset=utf-8',
+            'Cache-Control':'no-store',
+            'X-Subtitle-Bridge-Cache':packet.cache
+        });
         res.end(JSON.stringify(result));
+        setTimeout(function() {
+            mkvCueWindowCache.prefetchNext(mediaUrl, trackOrdinal, time, result);
+        }, 0);
     }).catch(function(error) {
         res.writeHead(502, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
         res.end(JSON.stringify({error:String(error && error.message || error || 'MKV extraction failed').slice(0,500)}));
