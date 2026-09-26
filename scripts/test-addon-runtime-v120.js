@@ -12,7 +12,7 @@ assert(source.includes('__sbExtInteractiveSignature === __sbExtRenderSignature')
 assert(source.includes('__sbExtBuildInteractive(), __sbExtSyncInteractive(), __sbExtDebug()'), 'new addon cues must prebuild hit targets immediately');
 assert(source.includes('document.querySelector(".menu-KhHHT")'), 'settings/menu guard missing');
 assert(source.includes('window.__subtitleBridgeExternalActive = null != t'), 'addon ownership flag missing');
-assert(source.includes('if (window.__subtitleBridgeExternalActive && !__sbSelecting && !__sbTranslationOpen) return;'), 'embedded key handler must not start MKV fallback for addon subtitles');
+assert(source.includes('if ("undefined" != typeof window && window.__subtitleBridgeExternalActive && !__sbSelecting && !__sbTranslationOpen) return;'), 'embedded key handler must not start MKV fallback for addon subtitles');
 assert(source.includes('e && (h.style.visibility = "hidden")'), 'normal addon subtitle should only be hidden when interactive selection is visible');
 assert(source.includes('__sbExtInteractiveOverlay.style.opacity = String(L)'), 'selection must reveal interactive addon subtitle');
 assert(source.includes('__sbExtCurrentLines = n'), 'normal renderer must capture the current cue without wordifying it');
