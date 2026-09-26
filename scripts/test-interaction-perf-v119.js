@@ -11,8 +11,8 @@ assert(source.includes('document.addEventListener("pointermove", __sbMagicPointe
 assert(source.includes('document.addEventListener("mousemove", __sbMagicPointerMove, !0)'), 'embedded mouse activation listener missing');
 assert(source.includes('__sbOverlay.style.position = "fixed", __sbOverlay.style.zIndex = "2147483000"'), 'embedded pointer activation must elevate hit targets');
 
-assert(source.includes('__sbExtEmbeddedSelected'), 'addon renderer must detect selected embedded tracks');
-assert(source.includes('window.__subtitleBridgeEmbeddedActive || __sbExtEmbeddedSelected'), 'addon renderer must stay out of embedded playback');
+assert(source.includes('/^EMBEDDED_\\d+$/.test(String(e.selectedEmbeddedTrackId || ""))'), 'addon renderer must detect selected embedded tracks');
+assert(source.includes('window.__subtitleBridgeEmbeddedActive || t'), 'addon renderer must stay out of embedded playback');
 assert(source.includes('(null !== g || h.hasChildNodes()) && I()'), 'addon renderer must skip empty time-update work');
 assert(source.includes('function __sbExtSetMagicPointerPortal(e)'), 'addon on-demand Magic Remote portal missing');
 assert(source.includes('document.addEventListener("pointermove", __sbExtMagicPointerMove, !0)'), 'addon pointer activation listener missing');
