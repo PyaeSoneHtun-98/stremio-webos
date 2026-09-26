@@ -122,7 +122,7 @@ replaceSection(
                         __sbExtSyncInteractive()
                     }
 
-
+`
 );
 
 replaceSection(
