@@ -26,6 +26,7 @@ The service exposes `/subtitle-bridge/diagnostics` for one real-TV acceptance se
 - The embedded Magic Remote portal timeout is refreshed at most once per 750 ms while the pointer moves.
 - Addon pointer-move handlers that repeatedly queried menu layout were removed. The existing always-ready word hit layer still handles direct Magic Remote clicks. Menu synchronization timeouts are deduplicated and cleared on destroy.
 - The obsolete FFmpeg embedded-subtitle HTTP endpoint and its probe/window caches were removed. Bundled FFmpeg and ffprobe remain because the official Stremio server needs them for playback, remuxing, and transcoding.
+- Generated `.orig` patch backups are removed before packaging; they duplicated 2.69 MB of frontend JavaScript and were never loaded.
 - The transient version badge removes its DOM node after fading.
 
 ## Automated coverage

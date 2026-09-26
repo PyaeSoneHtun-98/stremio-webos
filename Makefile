@@ -54,6 +54,7 @@ build: service/server.js service/bin/ffmpeg service/bin/ffprobe service/data/dic
 		echo "    Applying $$(basename $$p)..."; \
 		patch -p0 -d service/www < "$$p"; \
 	done
+	@rm -f service/www/*.orig
 	@echo "==> Applying Subtitle Bridge embedded subtitle POC..."
 	@node scripts/apply-embedded-subtitle-poc.js service/www/video.chunk.js
 	@node scripts/apply-embedded-subtitle-v106.js service/www/video.chunk.js

@@ -36,5 +36,7 @@ assert(!launch.includes('/subtitle-bridge/embedded.vtt'),'dead FFmpeg embedded e
 assert(!launch.includes("require('child_process')"),'subtitle service must not load child_process for dead extraction');
 assert(launch.includes('/subtitle-bridge/diagnostics'),'real-TV resource diagnostics endpoint must ship');
 assert(launch.includes('maxBytes: 4 * 1024 * 1024'),'MKV window cache must keep its byte ceiling');
+const wwwDir=path.join(__dirname,'..','service','www');
+if(fs.existsSync(wwwDir)) assert(!fs.readdirSync(wwwDir).some(name=>/\.orig$/.test(name)),'patch backup files must not ship in the app');
 console.log('RESOURCE '+JSON.stringify(report));
 console.log('PASS: dictionary coverage/performance/memory bounds and dead extraction removal');
