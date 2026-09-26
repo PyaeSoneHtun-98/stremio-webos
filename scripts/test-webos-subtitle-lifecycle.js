@@ -106,7 +106,7 @@ function keyHarness(external) {
         Date: { now: () => 10000 }, U: () => {}, __sbLastKey: '',
         __sbSelecting: false, __sbUpPrimedUntil: 0, __sbTranslationOpen: false,
         __sbPendingSelectionUntil: 0, __sbSelectionWaitUntil: 0,
-        __sbExtSelecting: false, __sbExtUpPrimedUntil: 0,
+        __sbExtSelecting: false, __sbExtUpPrimedUntil: 0, __sbExtPopupOpen: false,
         __sbStartSelection: () => { starts++; return available; },
         __sbExtStart: () => { starts++; return available; },
         __sbSetStatus: value => { status = value; },
