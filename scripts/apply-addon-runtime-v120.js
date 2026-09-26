@@ -179,7 +179,7 @@ replaceOnce(
 replaceOnce(
     'embedded key handler addon ownership',
     'if (403 === r || "ColorF0Red" === t) return __sbToggleDebug(), e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation && e.stopImmediatePropagation(), void 0;\n                    if (__sbTranslationOpen) {',
-    'if (403 === r || "ColorF0Red" === t) return __sbToggleDebug(), e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation && e.stopImmediatePropagation(), void 0;\n                    if (window.__subtitleBridgeExternalActive && !__sbSelecting && !__sbTranslationOpen) return;\n                    if (__sbTranslationOpen) {'
+    'if (403 === r || "ColorF0Red" === t) return __sbToggleDebug(), e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation && e.stopImmediatePropagation(), void 0;\n                    if ("undefined" != typeof window && window.__subtitleBridgeExternalActive && !__sbSelecting && !__sbTranslationOpen) return;\n                    if (__sbTranslationOpen) {'
 );
 replaceOnce(
     'addon menu sync listeners',
