@@ -14,8 +14,8 @@ assert(source.includes('r.phraseMatch.endTokenIndex'), 'phrase end index must dr
 assert(source.includes('rgba(190,239,220,.94)'), 'desktop-style selected-word accent missing');
 assert(source.includes('rgba(181,230,209,.24)'), 'phrase-range accent missing');
 assert(source.includes('__sbTranslationOutsidePointer'), 'outside-pointer close handler missing');
-assert(source.includes('t.addEventListener("pointerdown", __sbTranslationOutsidePointer, !0)'), 'outside-pointer listener missing');
-assert(source.includes('t.removeEventListener("pointerdown", __sbTranslationOutsidePointer, !0)'), 'outside-pointer cleanup missing');
+assert(source.includes('document.addEventListener("pointerdown", __sbTranslationOutsidePointer, !0)'), 'outside-pointer listener missing');
+assert(source.includes('document.removeEventListener("pointerdown", __sbTranslationOutsidePointer, !0)'), 'outside-pointer cleanup missing');
 
 const dismissStart = source.indexOf('function __sbDismissTranslation()');
 const dismissEnd = source.indexOf('function __sbTranslationClearBody()', dismissStart);

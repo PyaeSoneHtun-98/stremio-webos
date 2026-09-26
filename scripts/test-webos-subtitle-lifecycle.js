@@ -160,9 +160,17 @@ class Element {
 }
 const elements = [], nativeCalls = [], adapterTimers = new Map();
 let timerId = 0;
+const adapterDocumentBody = new Element('body');
+const adapterDocument = {
+    body: adapterDocumentBody,
+    documentElement: adapterDocumentBody,
+    createElement: tag => { const element = new Element(tag); elements.push(element); return element; },
+    addEventListener() {},
+    removeEventListener() {}
+};
 const adapterContext = {
     HTMLElement: Element,
-    document: { createElement: tag => { const element = new Element(tag); elements.push(element); return element; } },
+    document: adapterDocument,
     window: { addEventListener() {}, removeEventListener() {}, webOS: { service: {
         request: (uri, options) => { nativeCalls.push(options); return { cancel() {} }; }
     } } },
