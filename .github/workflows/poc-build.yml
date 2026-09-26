@@ -31,10 +31,21 @@ jobs:
           npm install --prefix .work/browser-tests --no-save --package-lock=false playwright@1.62.1
           .work/browser-tests/node_modules/.bin/playwright install --with-deps chromium
           NODE_PATH="$PWD/.work/browser-tests/node_modules" node scripts/test-webos-browser-playback.js service/www/video.chunk.js
+          NODE_PATH="$PWD/.work/browser-tests/node_modules" node scripts/test-webos-browser-performance.js service/www/video.chunk.js
+
+      - name: Report package resources
+        run: node scripts/report-package-resources.js resource-report.json
 
       - name: Upload IPK
         uses: actions/upload-artifact@v4
         with:
           name: stremio-webos-embedded-subtitle-poc
           path: '*_all.ipk'
+          if-no-files-found: error
+
+      - name: Upload resource report
+        uses: actions/upload-artifact@v4
+        with:
+          name: stremio-webos-resource-report
+          path: resource-report.json
           if-no-files-found: error

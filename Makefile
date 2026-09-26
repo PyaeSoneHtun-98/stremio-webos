@@ -74,6 +74,7 @@ build: service/server.js service/bin/ffmpeg service/bin/ffprobe service/data/dic
 	@node scripts/apply-addon-parity-v118.js service/www/video.chunk.js
 	@node scripts/apply-interaction-perf-v119.js service/www/video.chunk.js
 	@node scripts/apply-addon-runtime-v120.js service/www/video.chunk.js
+	@node scripts/apply-performance-v122.js service/www/video.chunk.js
 	@grep -q '__subtitleBridgePOCv108' service/www/video.chunk.js
 	@grep -q '__subtitleBridgePOCv111' service/www/video.chunk.js
 	@grep -q '__subtitleBridgePOCv112' service/www/video.chunk.js
@@ -85,6 +86,7 @@ build: service/server.js service/bin/ffmpeg service/bin/ffprobe service/data/dic
 	@grep -q '__subtitleBridgePOCv118' service/www/video.chunk.js
 	@grep -q '__subtitleBridgePOCv119' service/www/video.chunk.js
 	@grep -q '__subtitleBridgePOCv120' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv122' service/www/video.chunk.js
 	@grep -q 'data-subtitle-bridge-external-word' service/www/video.chunk.js
 	@echo "==> Build complete"
 
@@ -105,6 +107,9 @@ test: build
 	@node scripts/test-addon-parity-v118.js service/www/video.chunk.js
 	@node scripts/test-interaction-perf-v119.js service/www/video.chunk.js
 	@node scripts/test-addon-runtime-v120.js service/www/video.chunk.js
+	@node scripts/test-performance-v122.js service/www/video.chunk.js
+	@node --expose-gc scripts/test-resource-bounds.js
+	@node scripts/benchmark-subtitle-cache.js
 
 package: test
 	@rm -f $(IPK)

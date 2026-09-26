@@ -15,7 +15,11 @@ assert(source.includes('/^EMBEDDED_\\d+$/.test(String(e.selectedEmbeddedTrackId 
 assert(source.includes('window.__subtitleBridgeEmbeddedActive || t'), 'addon renderer must stay out of embedded playback');
 assert(source.includes('(null !== g || h.hasChildNodes()) && I()'), 'addon renderer must skip empty time-update work');
 assert(source.includes('function __sbExtSetMagicPointerPortal(e)'), 'addon on-demand Magic Remote portal missing');
-assert(source.includes('document.addEventListener("pointermove", __sbExtMagicPointerMove, !0)'), 'addon pointer activation listener missing');
+if (source.includes('__subtitleBridgePOCv122')) {
+    assert(!source.includes('document.addEventListener("pointermove", __sbExtMagicPointerMove, !0)'), 'always-ready addon layer must not run layout work on pointer movement');
+} else {
+    assert(source.includes('document.addEventListener("pointermove", __sbExtMagicPointerMove, !0)'), 'addon pointer activation listener missing');
+}
 assert(source.includes('h.style.pointerEvents = "none", h.style.zIndex = "1", h.style.position = "absolute"'), 'addon visible layer must remain low and player-local');
 assert(source.includes('data-subtitle-bridge-external-interaction'), 'addon Magic Remote must use a separate interaction layer');
 assert(source.includes('data-subtitle-bridge-translation", "external"'), 'addon dictionary parity must remain intact');

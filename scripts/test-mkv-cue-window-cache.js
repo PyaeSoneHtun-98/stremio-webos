@@ -19,7 +19,7 @@ function fakeExtract(mediaUrl, trackOrdinal, time) {
 }
 
 async function main() {
-    const cache = cacheModule.createMkvCueWindowCache(fakeExtract, { maxEntries: 4, ttlMs: 60000, bucketSeconds: 20 });
+    const cache = cacheModule.createMkvCueWindowCache(fakeExtract, { maxEntries: 4, maxBytes: 4096, ttlMs: 60000, bucketSeconds: 20 });
 
     const both = await Promise.all([
         cache.load('http://example.test/a.mkv', 2, 100),
@@ -45,6 +45,8 @@ async function main() {
         await cache.load('http://example.test/' + i + '.mkv', 0, i * 100);
     }
     assert(cache._entryCount() <= 4, 'cue cache must stay bounded');
+    assert(cache.stats().estimatedBytes <= 4096, 'cue cache must obey its byte ceiling');
+    assert(cache.stats().mediaClears >= 1, 'movie changes must clear prior cue windows');
 
     const revisit = cacheModule.createMkvCueWindowCache(fakeExtract, { maxEntries: 64, ttlMs: 4 * 60 * 60 * 1000, bucketSeconds: 20 });
     for (let time = 0; time < 800; time += 20) await revisit.load('http://example.test/long.mkv', 2, time);
@@ -55,6 +57,14 @@ async function main() {
     revisit.cancelDistantPrefetch('http://example.test/long.mkv', 2, 2000);
     assert.strictEqual(await prefetched, null, 'distant seek should cancel stale background prefetch');
 
-    console.log('PASS: MKV cue cache deduplicates, prefetches, retains visited areas, cancels stale prefetch, and stays bounded');
+    const lifecycle = cacheModule.createMkvCueWindowCache(fakeExtract, { maxEntries: 2048, maxBytes: 1024 * 1024, ttlMs: 4 * 60 * 60 * 1000 });
+    await lifecycle.load('http://example.test/episode-1.mkv', 0, 10);
+    await lifecycle.load('http://example.test/episode-1.mkv', 1, 20);
+    assert.strictEqual(lifecycle.stats().entries, 2);
+    await lifecycle.load('http://example.test/episode-2.mkv', 0, 10);
+    assert.strictEqual(lifecycle.stats().entries, 1, 'episode switch must discard old stream data');
+    assert.strictEqual(lifecycle.peek('http://example.test/episode-1.mkv', 0, 10), null);
+
+    console.log('PASS: MKV cue cache deduplicates, prefetches, retains current-title areas, cancels stale work, and obeys entry/byte/lifecycle bounds');
 }
 main().catch(function(error) { console.error(error); process.exitCode = 1; });

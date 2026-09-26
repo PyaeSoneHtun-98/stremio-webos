@@ -13,6 +13,25 @@ var MAX_SUBTITLE_BLOCK_BYTES = 64 * 1024;
 var TAIL_BYTES = 8 * 1024 * 1024;
 var metaCache = Object.create(null);
 var metaInflight = Object.create(null);
+var activeMediaTarget = null;
+var metrics = { rangeRequests:0, rangeBytes:0, retries:0, metadataHits:0, metadataMisses:0, cueIndexHits:0, cueIndexMisses:0, mediaClears:0, cancelled:0 };
+
+function createContext() { return { cancelled:false, requests:[], cancel:function() {
+    if (this.cancelled) return;
+    this.cancelled=true; metrics.cancelled++;
+    this.requests.slice().forEach(function(request){request.destroy(new Error('Subtitle request cancelled'));});
+} }; }
+
+function activateMedia(target) {
+    if (!target || activeMediaTarget === target) return;
+    if (activeMediaTarget !== null) {
+        Object.keys(metaInflight).forEach(function(key){var item=metaInflight[key];if(item&&item.context)item.context.cancel();});
+        Object.keys(metaCache).forEach(function(key){if(key!==target)delete metaCache[key];});
+        Object.keys(metaInflight).forEach(function(key){if(key!==target)delete metaInflight[key];});
+        metrics.mediaClears++;
+    }
+    activeMediaTarget=target;
+}
 
 function readId(buf, off) {
     if (off >= buf.length) return null;
@@ -159,6 +178,7 @@ function cancelled(context) {
 
 function requestBuffer(target, start, end, redirects, context) {
     redirects = redirects || 0;
+    metrics.rangeRequests++;
     return new Promise(function(resolve, reject) {
         try { cancelled(context); } catch (error) { return reject(error); }
         var parsed;
@@ -185,6 +205,7 @@ function requestBuffer(target, start, end, redirects, context) {
                 var total = null, cr = String(res.headers['content-range'] || '');
                 var m = /\/(\d+)$/.exec(cr); if (m) total = parseInt(m[1], 10);
                 if (total === null && res.statusCode === 200 && res.headers['content-length']) total = parseInt(res.headers['content-length'], 10);
+                metrics.rangeBytes += length;
                 resolve({ buffer: Buffer.concat(chunks), total: total, status: res.statusCode });
             });
         });
@@ -210,6 +231,7 @@ function fetchRange(target, start, length, context) {
             cancelled(context);
             attempt++;
             if (attempt >= 3) throw error;
+            metrics.retries++;
             return new Promise(function(resolve) { setTimeout(resolve, 150 * attempt); }).then(run);
         });
     }
@@ -223,12 +245,15 @@ function findCuesMagic(buf) {
 
 function loadMetadata(target) {
     var cached = metaCache[target];
-    if (cached && Date.now() - cached.at < 20 * 60 * 1000) return Promise.resolve(cached.value);
-    if (metaInflight[target]) return metaInflight[target];
-    var promise = fetchRange(target, 0, INITIAL_HEAD_BYTES).then(function(head) {
+    if (cached && Date.now() - cached.at < 20 * 60 * 1000) { cached.at=Date.now(); metrics.metadataHits++; return Promise.resolve(cached.value); }
+    if (metaInflight[target]) { metrics.metadataHits++; return metaInflight[target].promise; }
+    metrics.metadataMisses++;
+    var context=createContext();
+    var promise = fetchRange(target, 0, INITIAL_HEAD_BYTES, context).then(function(head) {
         var info = parseHeadBuffer(head.buffer, head.total);
+        info._context=context;
         if (info.tracks.length && (info.cuesAbsolute !== null || info.seekCuesAbsolute !== null || info.totalSize)) return info;
-        return fetchRange(target, 0, HEAD_BYTES).then(function(full) { return parseHeadBuffer(full.buffer, full.total); });
+        return fetchRange(target, 0, HEAD_BYTES, context).then(function(full) { var parsed=parseHeadBuffer(full.buffer, full.total);parsed._context=context;return parsed; });
     }).then(function(info) {
         if (!info.tracks.length) throw new Error('Matroska subtitle tracks not found in header');
         metaCache[target] = { at: Date.now(), value: info };
@@ -236,8 +261,9 @@ function loadMetadata(target) {
         if (keys.length > 8) keys.sort(function(a,b){ return metaCache[a].at - metaCache[b].at; }).slice(0, keys.length - 8).forEach(function(k){ delete metaCache[k]; });
         return info;
     });
-    metaInflight[target] = promise.then(function(value) { delete metaInflight[target]; return value; }, function(error) { delete metaInflight[target]; throw error; });
-    return metaInflight[target];
+    var tracked=promise.then(function(value){delete metaInflight[target];return value;},function(error){delete metaInflight[target];throw error;});
+    metaInflight[target]={promise:tracked,context:context};
+    return tracked;
 }
 
 function parseCues(buf, absoluteBase, expectedRoot) {
@@ -273,23 +299,25 @@ function parseCues(buf, absoluteBase, expectedRoot) {
 }
 
 function loadCues(target, info) {
-    if (info._cues) return Promise.resolve(info._cues);
-    if (info._cuesPromise) return info._cuesPromise;
+    if (info._cues) { metrics.cueIndexHits++; return Promise.resolve(info._cues); }
+    if (info._cuesPromise) { metrics.cueIndexHits++; return info._cuesPromise; }
+    metrics.cueIndexMisses++;
+    var context=info._context;
     var abs = info.cuesAbsolute || info.seekCuesAbsolute;
     function loadAt(pos) {
-        return fetchRange(target, pos, 64).then(function(first) {
+        return fetchRange(target, pos, 64, context).then(function(first) {
             var h = headerAt(first.buffer, 0);
             if (!h || h.id !== 0x1C53BB6B) throw new Error('Cues seek target is invalid');
             var need = h.unknown ? MAX_CUES_BYTES : h.headerLength + h.size;
             if (need > MAX_CUES_BYTES) throw new Error('Cues element too large');
-            return fetchRange(target, pos, need).then(function(full) { return parseCues(full.buffer, pos, 0); });
+            return fetchRange(target, pos, need, context).then(function(full) { return parseCues(full.buffer, pos, 0); });
         });
     }
     var promise;
     if (abs !== null && abs !== undefined) promise = loadAt(abs);
     else if (info.totalSize) {
         var len = Math.min(TAIL_BYTES, info.totalSize), start = info.totalSize - len;
-        promise = fetchRange(target, start, len).then(function(tail) { return parseCues(tail.buffer, start, null); });
+        promise = fetchRange(target, start, len, context).then(function(tail) { return parseCues(tail.buffer, start, null); });
     } else promise = Promise.reject(new Error('Cues location unavailable'));
     info._cuesPromise = promise.then(function(cues) { info._cues = cues; info._cuesPromise = null; return cues; }, function(error) { info._cuesPromise = null; throw error; });
     return info._cuesPromise;
@@ -541,4 +569,9 @@ function extractWindow(target, subtitleOrdinal, timeSec, context) {
     });
 }
 
-module.exports = { extractWindow: extractWindow, extractActiveCue: extractActiveCue, _parseHeadBuffer: parseHeadBuffer, _parseCues: parseCues };
+module.exports = { extractWindow: extractWindow, extractActiveCue: extractActiveCue, activateMedia: activateMedia,
+    getStats: function(){return {rangeRequests:metrics.rangeRequests,rangeBytes:metrics.rangeBytes,retries:metrics.retries,
+        metadataHits:metrics.metadataHits,metadataMisses:metrics.metadataMisses,cueIndexHits:metrics.cueIndexHits,
+        cueIndexMisses:metrics.cueIndexMisses,mediaClears:metrics.mediaClears,cancelled:metrics.cancelled,
+        metadataEntries:Object.keys(metaCache).length,metadataInflight:Object.keys(metaInflight).length,activeMedia:!!activeMediaTarget};},
+    _parseHeadBuffer: parseHeadBuffer, _parseCues: parseCues };

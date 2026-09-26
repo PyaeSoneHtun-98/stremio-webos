@@ -29,6 +29,7 @@ var LEGACY_ALIASES = {
 };
 
 var singleton = null;
+var defaultStats = { loaded:false, initializationMs:0, heapDeltaBytes:0, dictionaryFileBytes:0, phraseFileBytes:0 };
 
 function normalize(value) {
     value = String(value == null ? '' : value);
@@ -52,17 +53,20 @@ function phraseTypeLabel(type) {
 }
 
 function createProvider(dictionaryDataset, phraseDataset, coreEntries, aliases) {
-    var entries = (dictionaryDataset && Array.isArray(dictionaryDataset.entries) ? dictionaryDataset.entries : []).slice();
-    (coreEntries || []).forEach(function(entry) { entries.push(entry); });
+    var dictionaryEntries = dictionaryDataset && Array.isArray(dictionaryDataset.entries) ? dictionaryDataset.entries : [];
+    var extraEntries = coreEntries || [];
+    var index = Object.create(null), phraseVariants = Object.create(null), maxPhraseTokens = 0;
 
-    var exact = Object.create(null), index = Object.create(null), phraseVariants = Object.create(null), maxPhraseTokens = 0;
-
-    entries.forEach(function(entry) {
+    function eachEntry(callback) {
+        dictionaryEntries.forEach(callback);
+        extraEntries.forEach(callback);
+    }
+    eachEntry(function(entry) {
         var key = normalize(entry.word);
-        if (key && !exact[key]) { exact[key] = entry; index[key] = entry; }
+        if (key && !index[key]) index[key] = entry;
     });
 
-    entries.forEach(function(entry) {
+    eachEntry(function(entry) {
         (entry.forms || []).forEach(function(form) {
             var key = normalize(form);
             if (key && !index[key]) index[key] = entry;
@@ -70,7 +74,7 @@ function createProvider(dictionaryDataset, phraseDataset, coreEntries, aliases) 
     });
 
     Object.keys(aliases || {}).forEach(function(headword) {
-        var entry = exact[normalize(headword)];
+        var entry = index[normalize(headword)];
         if (!entry) return;
         aliases[headword].forEach(function(alias) {
             var key = normalize(alias);
@@ -148,17 +152,24 @@ function createProvider(dictionaryDataset, phraseDataset, coreEntries, aliases) 
                 resolvedFromForm: normalize(entry.word) !== normalize(lookupWord)
             };
         },
-        counts: { dictionary: entries.length, phrases: phraseEntries.length }
+        counts: { dictionary: dictionaryEntries.length + extraEntries.length, phrases: phraseEntries.length,
+            dictionaryKeys: Object.keys(index).length, phraseVariants: Object.keys(phraseVariants).length }
     };
 }
 
 function loadDefaultProvider() {
     if (singleton) return singleton;
+    var started = Date.now();
+    var beforeHeap = process.memoryUsage ? process.memoryUsage().heapUsed : 0;
     var dictionaryPath = path.join(__dirname, 'data', 'dictionary.json');
     var phrasesPath = path.join(__dirname, 'data', 'phrases.json');
     var dictionary = JSON.parse(fs.readFileSync(dictionaryPath, 'utf8'));
     var phrases = JSON.parse(fs.readFileSync(phrasesPath, 'utf8'));
     singleton = createProvider(dictionary, phrases, CORE_ENTRIES, LEGACY_ALIASES);
+    defaultStats = { loaded:true, initializationMs:Date.now()-started,
+        heapDeltaBytes:Math.max(0,(process.memoryUsage ? process.memoryUsage().heapUsed : beforeHeap)-beforeHeap),
+        dictionaryFileBytes:fs.statSync(dictionaryPath).size, phraseFileBytes:fs.statSync(phrasesPath).size,
+        counts:singleton.counts };
     return singleton;
 }
 
@@ -169,6 +180,7 @@ function lookup(word, contextTokens, clickedTokenIndex) {
 module.exports = {
     lookup: lookup,
     createProvider: createProvider,
+    getStats: function() { return defaultStats; },
     _normalizePhraseToken: normalizePhraseToken,
     _phraseTypeLabel: phraseTypeLabel
 };

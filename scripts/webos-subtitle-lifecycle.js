@@ -3,10 +3,23 @@
 // Serialized native commands, independent from metadata/timeupdate delivery.
 // This function is embedded verbatim into the pinned Vidaa adapter by the patcher.
 function createSubtitleLifecycle(options) {
-    var timer = null, active = false, mediaId = '', generation = 0;
+    var timer = null, pollDelay = 0, active = false, mediaId = '', generation = 0, ticks = 0;
     var track = null, enabled = null, selected = null, appliedEnabled = null;
     var command = null, commandAttempts = 0, nextCommandAt = 0;
     var subscription = null, subscriptionToken = 0, subscribeAttempts = 0, retryAt = 0;
+
+    function desiredPollDelay() {
+        var settled = mediaId && subscription && !command && track === selected &&
+            (enabled === null || enabled === appliedEnabled);
+        return settled ? 1000 : 100;
+    }
+
+    function setPolling(delay) {
+        if (!active || pollDelay === delay) return;
+        if (timer !== null) options.clearInterval(timer);
+        pollDelay = delay;
+        timer = options.setInterval(tick, delay);
+    }
 
     function cancelSubscription() {
         subscriptionToken++;
@@ -59,6 +72,8 @@ function createSubtitleLifecycle(options) {
     }
 
     function tick() {
+        ticks++;
+        try {
         if (!active) return;
         var id = options.mediaId();
         if (!id || id === '<invalid mediaId>') return;
@@ -108,12 +123,15 @@ function createSubtitleLifecycle(options) {
                 onFailure: failed
             });
         } catch (error) { failed(error); }
+        } finally {
+            if (active) setPolling(desiredPollDelay());
+        }
     }
 
     return {
         start: function() {
             active = true;
-            if (timer === null) timer = options.setInterval(tick, 100);
+            setPolling(100);
             tick();
         },
         stop: function() {
@@ -122,6 +140,7 @@ function createSubtitleLifecycle(options) {
             cancelSubscription();
             if (timer !== null) options.clearInterval(timer);
             timer = null;
+            pollDelay = 0;
             mediaId = '';
             track = selected = enabled = appliedEnabled = null;
         },
@@ -134,7 +153,9 @@ function createSubtitleLifecycle(options) {
             if (enabled !== value) { enabled = value; invalidate(); }
             tick();
         },
-        tick: tick
+        tick: tick,
+        stats: function() { return {active:active,pollDelay:pollDelay,ticks:ticks,hasSubscription:!!subscription,
+            hasCommand:!!command,selected:!!selected,enabled:enabled,appliedEnabled:appliedEnabled}; }
     };
 }
 
