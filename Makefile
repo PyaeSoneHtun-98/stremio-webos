@@ -1,19 +1,35 @@
 DEVICE ?= tv
-APP_ID = io.strem.tv
+APP_ID = com.pyaesone.stremiosb
 SERVER_VERSION = 4.20.17
 VIDAA_REF = 208d437e5138adff0865443a2a88c4fcee84ece6
 VIDAA_REPO = https://github.com/NoobyGains/stremio-vidaa-tv/archive/$(VIDAA_REF).tar.gz
 FFMPEG_VERSION = 7.0.2
 FFMPEG_URL = https://johnvansickle.com/ffmpeg/releases/ffmpeg-$(FFMPEG_VERSION)-arm64-static.tar.xz
 FFMPEG_SHA256 = f4149bb2b0784e30e99bdda85471c9b5930d3402014e934a5098b41d0f7201b1
+DICTIONARY_DATA_REF = f875a3b5a52be294f27e5d6907c86c253f494714
+DICTIONARY_DATA_BASE = https://raw.githubusercontent.com/PyaeSoneHtun-98/stremio_dictionary/$(DICTIONARY_DATA_REF)/src/main/translation/data
 VERSION = $(shell python3 -c "import json; print(json.load(open('app/appinfo.json'))['version'])")
 IPK = $(APP_ID)_$(VERSION)_all.ipk
 
-.PHONY: build package deploy launch restart clean
+.PHONY: build test package deploy launch restart clean
 
 service/server.js:
 	@echo "==> Downloading Stremio server v$(SERVER_VERSION)..."
 	@curl -so $@ "https://dl.strem.io/server/v$(SERVER_VERSION)/webos/server.js"
+
+service/data/dictionary.json:
+	@echo "==> Downloading Subtitle Bridge 30K dictionary..."
+	@mkdir -p service/data
+	@curl -fsSL "$(DICTIONARY_DATA_BASE)/dictionary.json" -o /tmp/subtitle-bridge-dictionary.json
+	@node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/subtitle-bridge-dictionary.json','utf8'));if(x.version!==1||!Array.isArray(x.entries)||x.entries.length<30000)throw new Error('Unexpected dictionary dataset');fs.writeFileSync('service/data/dictionary.json',JSON.stringify(x));"
+	@rm -f /tmp/subtitle-bridge-dictionary.json
+
+service/data/phrases.json:
+	@echo "==> Downloading Subtitle Bridge phrase dictionary..."
+	@mkdir -p service/data
+	@curl -fsSL "$(DICTIONARY_DATA_BASE)/phrases.json" -o /tmp/subtitle-bridge-phrases.json
+	@node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/subtitle-bridge-phrases.json','utf8'));if(x.version!==1||!Array.isArray(x.entries)||x.entries.length<1000)throw new Error('Unexpected phrase dataset');fs.writeFileSync('service/data/phrases.json',JSON.stringify(x));"
+	@rm -f /tmp/subtitle-bridge-phrases.json
 
 service/bin/ffmpeg service/bin/ffprobe:
 	@echo "==> Downloading static ffmpeg+ffprobe v$(FFMPEG_VERSION) (aarch64)..."
@@ -25,7 +41,7 @@ service/bin/ffmpeg service/bin/ffprobe:
 	@chmod +x service/bin/ffmpeg service/bin/ffprobe
 	@rm -rf /tmp/stremio-ffmpeg
 
-build: service/server.js service/bin/ffmpeg service/bin/ffprobe
+build: service/server.js service/bin/ffmpeg service/bin/ffprobe service/data/dictionary.json service/data/phrases.json
 	@echo "==> Downloading Vidaa frontend..."
 	@rm -rf /tmp/stremio-vidaa-build && mkdir -p /tmp/stremio-vidaa-build
 	@curl -sL $(VIDAA_REPO) | tar xz --strip-components=1 -C /tmp/stremio-vidaa-build
@@ -38,9 +54,65 @@ build: service/server.js service/bin/ffmpeg service/bin/ffprobe
 		echo "    Applying $$(basename $$p)..."; \
 		patch -p0 -d service/www < "$$p"; \
 	done
+	@rm -f service/www/*.orig
+	@echo "==> Applying Subtitle Bridge embedded subtitle POC..."
+	@node scripts/apply-embedded-subtitle-poc.js service/www/video.chunk.js
+	@node scripts/apply-embedded-subtitle-v106.js service/www/video.chunk.js
+	@node scripts/apply-embedded-subtitle-v107.js service/www/video.chunk.js
+	@grep -q 'data-subtitle-bridge-poc' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv106' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv107' service/www/video.chunk.js
+	@echo "==> Applying Subtitle Bridge external subtitle POC..."
+	@node scripts/apply-external-subtitle-poc.js service/www/video.chunk.js
+	@node scripts/apply-embedded-subtitle-v108.js service/www/video.chunk.js
+	@node scripts/apply-embedded-subtitle-v111.js service/www/video.chunk.js
+	@node scripts/apply-embedded-subtitle-v112.js service/www/video.chunk.js
+	@node scripts/apply-translation-v113.js service/www/video.chunk.js
+	@node scripts/apply-interactions-v114.js service/www/video.chunk.js
+	@node scripts/apply-word-tokenizer-v115.js service/www/video.chunk.js
+	@node scripts/apply-polish-v116.js service/www/video.chunk.js
+	@node scripts/apply-indexed-mkv-v117.js service/www/video.chunk.js
+	@node scripts/apply-addon-parity-v118.js service/www/video.chunk.js
+	@node scripts/apply-interaction-perf-v119.js service/www/video.chunk.js
+	@node scripts/apply-addon-runtime-v120.js service/www/video.chunk.js
+	@node scripts/apply-performance-v122.js service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv108' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv111' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv112' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv113' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv114' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv115' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv116' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv117' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv118' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv119' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv120' service/www/video.chunk.js
+	@grep -q '__subtitleBridgePOCv122' service/www/video.chunk.js
+	@grep -q 'data-subtitle-bridge-external-word' service/www/video.chunk.js
 	@echo "==> Build complete"
 
-package: build
+test: build
+	@echo "==> Testing embedded subtitle selection + cue POC..."
+	@node --check service/www/video.chunk.js
+	@node scripts/test-embedded-subtitle-poc.js service/www/video.chunk.js
+	@node scripts/test-webos-subtitle-lifecycle.js service/www/video.chunk.js
+	@node scripts/test-mkv-subtitle-extractor.js
+	@node scripts/test-mkv-subtitle-refresh.js service/www/video.chunk.js
+	@node scripts/test-dictionary-provider.js
+	@node scripts/test-tv-dictionary-popup.js service/www/video.chunk.js
+	@node scripts/test-tv-interactions-v114.js service/www/video.chunk.js
+	@node scripts/test-tv-word-tokenizer-v115.js service/www/video.chunk.js
+	@node scripts/test-mkv-cue-window-cache.js
+	@node scripts/test-polish-v116.js service/www/video.chunk.js
+	@node scripts/test-indexed-mkv-v117.js service/www/video.chunk.js
+	@node scripts/test-addon-parity-v118.js service/www/video.chunk.js
+	@node scripts/test-interaction-perf-v119.js service/www/video.chunk.js
+	@node scripts/test-addon-runtime-v120.js service/www/video.chunk.js
+	@node scripts/test-performance-v122.js service/www/video.chunk.js
+	@node --expose-gc scripts/test-resource-bounds.js
+	@node scripts/benchmark-subtitle-cache.js
+
+package: test
 	@rm -f $(IPK)
 	@ares-package --no-minify app service -o .
 
@@ -59,4 +131,4 @@ restart:
 	@ares-launch --device $(DEVICE) $(APP_ID)
 
 clean:
-	rm -rf service/www service/server.js service/bin *.ipk
+	rm -rf service/www service/server.js service/bin service/data *.ipk
