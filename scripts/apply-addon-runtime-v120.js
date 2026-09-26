@@ -20,13 +20,13 @@ function replaceSection(name, startText, endText, replacement) {
 replaceOnce(
     'runtime marker',
     'window.__subtitleBridgePOCv116 = !0, window.__subtitleBridgePOCv117 = !0, window.__subtitleBridgePOCv118 = !0, window.__subtitleBridgePOCv119 = !0;',
-    'window.__subtitleBridgePOCv116 = !0, window.__subtitleBridgePOCv117 = !0, window.__subtitleBridgePOCv118 = !0, window.__subtitleBridgePOCv119 = !0, window.__subtitleBridgePOCv120 = !0;'
+    'window.__subtitleBridgePOCv116 = !0, window.__subtitleBridgePOCv117 = !0, window.__subtitleBridgePOCv118 = !0, window.__subtitleBridgePOCv119 = !0, window.__subtitleBridgePOCv120 = !0, window.__subtitleBridgePOCv121 = !0;'
 );
 
 replaceOnce(
     'addon runtime state',
     '__sbExtLookupVersion = 0,\n                        __sbExtMagicPortalTimer = null;',
-    '__sbExtLookupVersion = 0,\n                        __sbExtMagicPortalTimer = null,\n                        __sbExtInteractiveOverlay = null,\n                        __sbExtCurrentLines = [],\n                        __sbExtRenderSignature = "",\n                        __sbExtPointerActive = !1;'
+    '__sbExtLookupVersion = 0,\n                        __sbExtMagicPortalTimer = null,\n                        __sbExtInteractiveOverlay = null,\n                        __sbExtCurrentLines = [],\n                        __sbExtRenderSignature = "",\n                        __sbExtInteractiveSignature = "",\n                        __sbExtPointerActive = !1;'
 );
 
 replaceOnce(
@@ -42,8 +42,20 @@ replaceSection(
     'addon selection and pointer runtime',
     '                    function __sbExtStart(e) {',
     '                    function __sbExtOutsidePointer(e) {',
-    `                    function __sbExtBuildInteractive() {
+    `                    function __sbExtPlayerMenuOpen() {
+                        var e = document.querySelector(".menu-KhHHT");
+                        if (!e) return !1;
+                        try {
+                            var t = window.getComputedStyle ? window.getComputedStyle(e) : null;
+                            return !t || "none" !== t.display && "hidden" !== t.visibility && "0" !== t.opacity
+                        } catch (e) {
+                            return !0
+                        }
+                    }
+
+                    function __sbExtBuildInteractive() {
                         if (!__sbExtCurrentLines.length) return !1;
+                        if (__sbExtInteractiveSignature === __sbExtRenderSignature && __sbExtWords.length && __sbExtInteractiveOverlay.hasChildNodes()) return !0;
                         for (; __sbExtInteractiveOverlay.firstChild;) __sbExtInteractiveOverlay.removeChild(__sbExtInteractiveOverlay.firstChild);
                         __sbExtWords = [], __sbExtNextLine = 0, __sbExtInteractiveOverlay.style.bottom = Math.max(0, Math.min(35, E || 0)) + "%", __sbExtInteractiveOverlay.style.fontFamily = "inherit", __sbExtInteractiveOverlay.style.textAlign = "center";
                         for (var e = 0; e < __sbExtCurrentLines.length; e++) {
@@ -52,11 +64,22 @@ replaceSection(
                             var r = window.screen720p ? 1.538 : 1;
                             t.style.fontSize = Math.floor(b / 25 * r) + "vmin", t.style.color = S, t.style.backgroundColor = A, t.style.textShadow = "rgb(34, 34, 34) 1px 1px .1em", __sbExtWordify(t), __sbExtInteractiveOverlay.appendChild(t), __sbExtInteractiveOverlay.appendChild(document.createElement("br"))
                         }
-                        return __sbExtWords.length > 0
+                        return __sbExtInteractiveSignature = __sbExtRenderSignature, __sbExtWords.length > 0
+                    }
+
+                    function __sbExtSyncInteractive() {
+                        var e = window.__subtitleBridgeWebOSPOC, t = e && /^EMBEDDED_\\d+$/.test(String(e.selectedEmbeddedTrackId || ""));
+                        if (t || window.__subtitleBridgeEmbeddedActive || __sbExtPlayerMenuOpen() || !__sbExtCurrentLines.length) return __sbExtInteractiveOverlay.style.display = "none", __sbExtSelecting || (h.style.visibility = "visible"), void 0;
+                        if (!__sbExtBuildInteractive()) return __sbExtInteractiveOverlay.style.display = "none", void 0;
+                        __sbExtInteractiveOverlay.style.opacity = __sbExtSelecting ? String(L) : "0.001", __sbExtInteractiveOverlay.style.display = "block", h.style.visibility = __sbExtSelecting ? "hidden" : "visible"
+                    }
+
+                    function __sbExtScheduleUiSync() {
+                        setTimeout(__sbExtSyncInteractive, 0)
                     }
 
                     function __sbExtShowInteractive(e) {
-                        __sbExtBuildInteractive() && (__sbExtPointerActive = !e, __sbExtInteractiveOverlay.style.opacity = e ? String(L) : "0.001", __sbExtInteractiveOverlay.style.display = "block", e && (h.style.visibility = "hidden"))
+                        __sbExtPointerActive = !e, __sbExtSyncInteractive()
                     }
 
                     function __sbExtHideInteractive() {
@@ -65,11 +88,11 @@ replaceSection(
 
                     function __sbExtStart(e) {
                         if (!__sbExtWords.length && !__sbExtBuildInteractive() || !__sbExtWords.length) return !1;
-                        return __sbExtSelecting || (__sbExtWasPaused = !0 === f.paused, r.dispatch({ type: "setProp", propName: "paused", propValue: !0 }), __sbExtSelecting = !0), __sbExtPointerActive = !1, __sbExtInteractiveOverlay.style.opacity = String(L), __sbExtInteractiveOverlay.style.display = "block", h.style.visibility = "hidden", __sbExtSetSelected("number" == typeof e ? e : 0), !0
+                        return __sbExtSelecting || (__sbExtWasPaused = !0 === f.paused, r.dispatch({ type: "setProp", propName: "paused", propValue: !0 }), __sbExtSelecting = !0), __sbExtPointerActive = !1, __sbExtSyncInteractive(), __sbExtSetSelected("number" == typeof e ? e : 0), !0
                     }
 
                     function __sbExtExit(e) {
-                        __sbExtSelecting && (__sbExtDismissPopup(), __sbExtSelecting = !1, __sbExtSelected = -1, __sbExtPhraseRange = null, __sbExtWords.forEach((function(e) { e.style.outline = "none", e.style.backgroundColor = e.__sbBaseBackground, e.style.color = e.__sbBaseColor || "inherit", e.style.borderRadius = "0", e.style.boxShadow = "none" })), __sbExtHideInteractive(), e && !__sbExtWasPaused && r.dispatch({ type: "setProp", propName: "paused", propValue: !1 }), __sbExtDebug())
+                        __sbExtSelecting && (__sbExtDismissPopup(), __sbExtSelecting = !1, __sbExtSelected = -1, __sbExtPhraseRange = null, __sbExtWords.forEach((function(e) { e.style.outline = "none", e.style.backgroundColor = e.__sbBaseBackground, e.style.color = e.__sbBaseColor || "inherit", e.style.borderRadius = "0", e.style.boxShadow = "none" })), __sbExtSyncInteractive(), e && !__sbExtWasPaused && r.dispatch({ type: "setProp", propName: "paused", propValue: !1 }), __sbExtDebug())
                     }
 
                     function __sbExtWordify(e) {
@@ -92,19 +115,14 @@ replaceSection(
                     }
 
                     function __sbExtSetMagicPointerPortal(e) {
-                        e ? __sbExtShowInteractive(!1) : !__sbExtSelecting && __sbExtHideInteractive()
+                        e ? __sbExtSyncInteractive() : __sbExtSelecting || __sbExtSyncInteractive()
                     }
 
-                    function __sbExtMagicPointerMove(e) {
-                        if (!g || __sbExtSelecting || __sbExtPopupOpen || !__sbExtCurrentLines.length) return;
-                        var t = window.__subtitleBridgeWebOSPOC, r = t && /^EMBEDDED_\\d+$/.test(String(t.selectedEmbeddedTrackId || ""));
-                        if (r) return;
-                        __sbExtSetMagicPointerPortal(!0), null !== __sbExtMagicPortalTimer && clearTimeout(__sbExtMagicPortalTimer), __sbExtMagicPortalTimer = setTimeout((function() {
-                            __sbExtMagicPortalTimer = null, __sbExtSetMagicPointerPortal(!1)
-                        }), 2500)
+                    function __sbExtMagicPointerMove() {
+                        __sbExtSyncInteractive()
                     }
 
-`
+
 );
 
 replaceSection(
@@ -133,7 +151,7 @@ replaceSection(
                             e.style.display = "inline-block", e.style.padding = "0", e.style.whiteSpace = "pre-wrap", e.style.fontWeight = "600", e.style.lineHeight = "1.35", e.style.margin = ".1em 0";
                             var t = window.screen720p ? 1.538 : 1;
                             e.style.fontSize = Math.floor(b / 25 * t) + "vmin", e.style.color = S, e.style.backgroundColor = A, e.style.textShadow = "rgb(34, 34, 34) 1px 1px .1em", h.appendChild(e), h.appendChild(document.createElement("br"))
-                        })), __sbExtPointerActive && __sbExtShowInteractive(!1), __sbExtDebug()
+                        })), __sbExtInteractiveSignature = "", __sbExtBuildInteractive(), __sbExtSyncInteractive(), __sbExtDebug()
                     }
 
 `
@@ -142,12 +160,12 @@ replaceSection(
 replaceOnce(
     'addon selected-track reset',
     '                            case "selectedExtraSubtitlesTrackId":\n                                g = null, y = null, T = null;',
-    '                            case "selectedExtraSubtitlesTrackId":\n                                __sbExtCurrentLines = [], __sbExtRenderSignature = "", __sbExtWords = [], __sbExtHideInteractive(), g = null, y = null, T = null;'
+    '                            case "selectedExtraSubtitlesTrackId":\n                                window.__subtitleBridgeExternalActive = null != t, __sbExtCurrentLines = [], __sbExtRenderSignature = "", __sbExtInteractiveSignature = "", __sbExtWords = [], __sbExtHideInteractive(), g = null, y = null, T = null;'
 );
 replaceOnce(
     'addon unload reset',
     'return __sbExtUpPrimedUntil = 0, __sbExtExit(!1), g = null, v = [], y = null, T = null, I()',
-    'return __sbExtUpPrimedUntil = 0, __sbExtExit(!1), __sbExtCurrentLines = [], __sbExtRenderSignature = "", __sbExtWords = [], __sbExtHideInteractive(), g = null, v = [], y = null, T = null, I()'
+    'return window.__subtitleBridgeExternalActive = !1, __sbExtUpPrimedUntil = 0, __sbExtExit(!1), __sbExtCurrentLines = [], __sbExtRenderSignature = "", __sbExtInteractiveSignature = "", __sbExtWords = [], __sbExtHideInteractive(), g = null, v = [], y = null, T = null, I()'
 );
 replaceOnce(
     'addon interaction cleanup',
@@ -155,5 +173,24 @@ replaceOnce(
     '__sbExtDismissPopup(), __sbExtPopup && __sbExtPopup.parentNode && __sbExtPopup.parentNode.removeChild(__sbExtPopup), __sbExtInteractiveOverlay && __sbExtInteractiveOverlay.parentNode && __sbExtInteractiveOverlay.parentNode.removeChild(__sbExtInteractiveOverlay), m.removeAllListeners(), h.parentNode && h.parentNode.removeChild(h), !0;'
 );
 
+
+// v1.0.21: addon mode owns subtitle interaction keys; keep its transparent hit layer
+// ready per cue, but drop it whenever the pinned Stremio settings/menu is open.
+replaceOnce(
+    'embedded key handler addon ownership',
+    'if (403 === r || "ColorF0Red" === t) return __sbToggleDebug(), e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation && e.stopImmediatePropagation(), void 0;\n                    if (__sbTranslationOpen) {',
+    'if (403 === r || "ColorF0Red" === t) return __sbToggleDebug(), e.preventDefault(), e.stopPropagation(), e.stopImmediatePropagation && e.stopImmediatePropagation(), void 0;\n                    if (window.__subtitleBridgeExternalActive && !__sbSelecting && !__sbTranslationOpen) return;\n                    if (__sbTranslationOpen) {'
+);
+replaceOnce(
+    'addon menu sync listeners',
+    'window.addEventListener("keydown", __sbExtKeydown, !0), document.addEventListener("pointerdown", __sbExtOutsidePointer, !0), document.addEventListener("pointermove", __sbExtMagicPointerMove, !0), document.addEventListener("mousemove", __sbExtMagicPointerMove, !0);',
+    'window.addEventListener("keydown", __sbExtKeydown, !0), document.addEventListener("pointerdown", __sbExtOutsidePointer, !0), document.addEventListener("pointermove", __sbExtMagicPointerMove, !0), document.addEventListener("mousemove", __sbExtMagicPointerMove, !0), window.addEventListener("keyup", __sbExtScheduleUiSync, !0), document.addEventListener("pointerup", __sbExtScheduleUiSync, !0);'
+);
+replaceOnce(
+    'addon menu sync cleanup',
+    'document.removeEventListener("pointermove", __sbExtMagicPointerMove, !0), document.removeEventListener("mousemove", __sbExtMagicPointerMove, !0), null !== __sbExtMagicPortalTimer && (clearTimeout(__sbExtMagicPortalTimer), __sbExtMagicPortalTimer = null), __sbExtDismissPopup(),',
+    'document.removeEventListener("pointermove", __sbExtMagicPointerMove, !0), document.removeEventListener("mousemove", __sbExtMagicPointerMove, !0), window.removeEventListener("keyup", __sbExtScheduleUiSync, !0), document.removeEventListener("pointerup", __sbExtScheduleUiSync, !0), null !== __sbExtMagicPortalTimer && (clearTimeout(__sbExtMagicPortalTimer), __sbExtMagicPortalTimer = null), window.__subtitleBridgeExternalActive = !1, __sbExtDismissPopup(),'
+);
+
 fs.writeFileSync(target, source);
-console.log('    Applied v1.0.20 addon fast-path renderer + selection-only visible interaction overlay');
+console.log('    Applied v1.0.21 addon always-ready hit layer + settings gate + addon/MKV ownership');
