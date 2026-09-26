@@ -16,11 +16,12 @@ assert(source.includes('window.__subtitleBridgeEmbeddedActive || __sbExtEmbedded
 assert(source.includes('(null !== g || h.hasChildNodes()) && I()'), 'addon renderer must skip empty time-update work');
 assert(source.includes('function __sbExtSetMagicPointerPortal(e)'), 'addon on-demand Magic Remote portal missing');
 assert(source.includes('document.addEventListener("pointermove", __sbExtMagicPointerMove, !0)'), 'addon pointer activation listener missing');
-assert(source.includes('h.style.pointerEvents = "none", h.style.zIndex = "100", h.style.position = "absolute"'), 'addon idle layer must remain player-local');
+assert(source.includes('h.style.pointerEvents = "none", h.style.zIndex = "1", h.style.position = "absolute"'), 'addon visible layer must remain low and player-local');
+assert(source.includes('data-subtitle-bridge-external-interaction'), 'addon Magic Remote must use a separate interaction layer');
 assert(source.includes('data-subtitle-bridge-translation", "external"'), 'addon dictionary parity must remain intact');
 assert(source.includes('__sbExtStart(t) && __sbExtLookupSelected()'), 'addon direct Magic Remote lookup must remain intact');
 assert(source.includes('__sbStartSelection(i) && __sbLookupSelected()'), 'embedded direct Magic Remote lookup must remain intact');
 assert(source.includes('/subtitle-bridge/mkv-active-cue'), 'v1.0.17 indexed active-cue path must remain intact');
 assert(source.includes('__sbMkvRequest && __sbMkvRequest.cancel()'), 'v1.0.17 stale seek cancellation must remain intact');
 
-console.log('PASS: v1.0.19 preserves indexed MKV path while isolating addon DOM work and making Magic Remote portals on-demand');
+console.log('PASS: indexed MKV path preserved while addon visible and Magic interaction layers stay isolated');

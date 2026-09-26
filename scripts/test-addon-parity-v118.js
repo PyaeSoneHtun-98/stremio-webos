@@ -17,8 +17,9 @@ assert(source.includes('rgba(190,239,220,.94)'), 'desktop-style selected-word ac
 assert(source.includes('e.style.textShadow = "rgb(34, 34, 34) 1px 1px .1em"'), 'addon subtitle visual style must match embedded style');
 
 assert(source.includes('function __sbExtSetMagicPointerPortal(e)'), 'addon on-demand pointer portal missing');
-assert(source.includes('h.style.zIndex = "2147483000"'), 'addon pointer layer must be able to elevate above player controls');
-assert(source.includes('t.appendChild(h)'), 'addon Magic Remote portal must attach at document level when activated');
+assert(source.includes('data-subtitle-bridge-external-interaction'), 'addon separate interaction layer missing');
+assert(source.includes('__sbExtInteractiveOverlay.style.zIndex = "2147483000"'), 'addon invisible pointer layer must be above player controls');
+assert(source.includes('(document.body || document.documentElement).appendChild(__sbExtInteractiveOverlay)'), 'addon interaction layer must attach at document level');
 assert(source.includes('data-subtitle-bridge-translation", "external"'), 'addon popup marker missing');
 assert(source.includes('e.style.position = "fixed", e.style.zIndex = "2147483646"'), 'dictionary popup must be document-level fixed UI');
 assert(source.includes('(document.body || document.documentElement).appendChild(e), __sbExtPopup = e'), 'addon dictionary popup must attach outside player stacking context');
@@ -64,4 +65,4 @@ assert(keySource.includes('__sbExtSetSelected(__sbExtSelected + 1)'), 'addon Rig
 assert(keySource.includes('__sbExtSetSelected(0)'), 'addon Up should match embedded selection behavior');
 assert(keySource.includes('__sbExtExit(!0)'), 'addon Down/Back exit missing');
 
-console.log('PASS: v1.0.18 addon tokenizer/rendering/dictionary parity with v1.0.19 on-demand Magic Remote portal compatibility');
+console.log('PASS: addon tokenizer/dictionary parity with separate selection/Magic interaction layer compatibility');
