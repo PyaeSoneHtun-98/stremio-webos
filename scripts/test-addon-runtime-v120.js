@@ -13,7 +13,7 @@ assert(source.includes('__sbExtCurrentLines = n'), 'normal renderer must capture
 
 const renderStart = source.indexOf('function I() {', source.indexOf('data-subtitle-bridge-external-interaction'));
 const renderEnd = source.indexOf('function w(e, t, r) {', renderStart);
-assert(renderStart >= 0 && renderEnd > renderStart, 'addon renderer missing);
+assert(renderStart >= 0 && renderEnd > renderStart, 'addon renderer missing');
 const renderer = source.slice(renderStart, renderEnd);
 assert(!renderer.includes('__sbExtWordify(e)'), 'normal addon playback must not tokenize/rebuild words on every time update');
 assert(renderer.includes('a === __sbExtRenderSignature && h.hasChildNodes()'), 'unchanged addon cues must avoid repeated DOM rebuilds');
