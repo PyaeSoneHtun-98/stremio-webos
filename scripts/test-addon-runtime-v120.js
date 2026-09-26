@@ -13,8 +13,8 @@ assert(source.includes('__sbExtBuildInteractive(), __sbExtSyncInteractive(), __s
 assert(source.includes('document.querySelector(".menu-KhHHT")'), 'settings/menu guard missing');
 assert(source.includes('window.__subtitleBridgeExternalActive = null != t'), 'addon ownership flag missing');
 assert(source.includes('if ("undefined" != typeof window && window.__subtitleBridgeExternalActive && !__sbSelecting && !__sbTranslationOpen) return;'), 'embedded key handler must not start MKV fallback for addon subtitles');
-assert(source.includes('e && (h.style.visibility = "hidden")'), 'normal addon subtitle should only be hidden when interactive selection is visible');
-assert(source.includes('__sbExtInteractiveOverlay.style.opacity = String(L)'), 'selection must reveal interactive addon subtitle');
+assert(source.includes('h.style.visibility = __sbExtSelecting ? "hidden" : "visible"'), 'normal addon subtitle should only be hidden during interactive selection');
+assert(source.includes('__sbExtInteractiveOverlay.style.opacity = __sbExtSelecting ? String(L) : "0.001"'), 'selection must reveal interactive addon subtitle while normal playback keeps the hit layer transparent');
 assert(source.includes('__sbExtCurrentLines = n'), 'normal renderer must capture the current cue without wordifying it');
 
 const renderStart = source.indexOf('function I() {', source.indexOf('data-subtitle-bridge-external-interaction'));
