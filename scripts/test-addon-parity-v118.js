@@ -16,17 +16,19 @@ assert(source.includes('__sbExtPhraseRange = r && t.phraseMatch'), 'addon phrase
 assert(source.includes('rgba(190,239,220,.94)'), 'desktop-style selected-word accent missing');
 assert(source.includes('e.style.textShadow = "rgb(34, 34, 34) 1px 1px .1em"'), 'addon subtitle visual style must match embedded style');
 
-assert(source.includes('h.style.zIndex = "2147483000"'), 'addon pointer layer must be above player controls');
-assert(source.includes('(document.body || document.documentElement).appendChild(h)'), 'addon overlay must use document-level portal');
+assert(source.includes('function __sbExtSetMagicPointerPortal(e)'), 'addon on-demand pointer portal missing');
+assert(source.includes('h.style.zIndex = "2147483000"'), 'addon pointer layer must be able to elevate above player controls');
+assert(source.includes('t.appendChild(h)'), 'addon Magic Remote portal must attach at document level when activated');
 assert(source.includes('data-subtitle-bridge-translation", "external"'), 'addon popup marker missing');
 assert(source.includes('e.style.position = "fixed", e.style.zIndex = "2147483646"'), 'dictionary popup must be document-level fixed UI');
 assert(source.includes('(document.body || document.documentElement).appendChild(e), __sbExtPopup = e'), 'addon dictionary popup must attach outside player stacking context');
 assert(source.includes('document.addEventListener("pointerdown", __sbExtOutsidePointer, !0)'), 'addon outside-pointer handler missing');
 assert(source.includes('document.removeEventListener("pointerdown", __sbExtOutsidePointer, !0)'), 'addon outside-pointer cleanup missing');
 
-assert(source.includes('__sbOverlay.style.position = "fixed"'), 'embedded Magic Remote hit layer must be fixed');
-assert(source.includes('__sbOverlay.style.zIndex = "2147483000"'), 'embedded Magic Remote hit layer must be above Stremio controls');
-assert(source.includes('(document.body || document.documentElement).appendChild(__sbOverlay)'), 'embedded hit layer must leave player stacking context');
+assert(source.includes('function __sbSetMagicPointerPortal(e)'), 'embedded on-demand pointer portal missing');
+assert(source.includes('__sbOverlay.style.position = "fixed"'), 'embedded Magic Remote hit layer must be able to become fixed');
+assert(source.includes('__sbOverlay.style.zIndex = "2147483000"'), 'embedded Magic Remote hit layer must be able to rise above Stremio controls');
+assert(source.includes('r.appendChild(__sbOverlay)'), 'embedded hit layer must be able to leave the player stacking context');
 assert(source.includes('data-subtitle-bridge-translation", "1"), e.className = "translation-popup", e.style.position = "fixed"'), 'embedded popup must be fixed above controls');
 assert(source.includes('document.addEventListener("pointerdown", __sbTranslationOutsidePointer, !0)'), 'embedded pointer close listener must be document-level');
 assert(source.includes('document.removeEventListener("pointerdown", __sbTranslationOutsidePointer, !0)'), 'embedded pointer cleanup must be document-level');
@@ -62,4 +64,4 @@ assert(keySource.includes('__sbExtSetSelected(__sbExtSelected + 1)'), 'addon Rig
 assert(keySource.includes('__sbExtSetSelected(0)'), 'addon Up should match embedded selection behavior');
 assert(keySource.includes('__sbExtExit(!0)'), 'addon Down/Back exit missing');
 
-console.log('PASS: v1.0.18 addon tokenizer/rendering/dictionary parity and document-level Magic Remote interaction layer');
+console.log('PASS: v1.0.18 addon tokenizer/rendering/dictionary parity with v1.0.19 on-demand Magic Remote portal compatibility');
