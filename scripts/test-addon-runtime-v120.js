@@ -4,9 +4,15 @@ const assert = require('assert');
 const source = fs.readFileSync(process.argv[2], 'utf8');
 
 assert(source.includes('__subtitleBridgePOCv120'), 'v1.0.20 marker missing');
+assert(source.includes('__subtitleBridgePOCv121'), 'v1.0.21 marker missing');
 assert(source.includes('h.style.pointerEvents = "none", h.style.zIndex = "1"'), 'normal addon subtitle must use original low player-local stacking');
 assert(source.includes('data-subtitle-bridge-external-interaction'), 'separate addon interaction layer missing');
-assert(source.includes('__sbExtInteractiveOverlay.style.opacity = e ? String(L) : "0.001"'), 'Magic Remote hit layer must stay visually invisible outside selection');
+assert(source.includes('__sbExtInteractiveOverlay.style.opacity = __sbExtSelecting ? String(L) : "0.001"'), 'Magic Remote hit layer must stay visually invisible outside selection');
+assert(source.includes('__sbExtInteractiveSignature === __sbExtRenderSignature'), 'unchanged addon cue hit targets must be reused');
+assert(source.includes('__sbExtBuildInteractive(), __sbExtSyncInteractive(), __sbExtDebug()'), 'new addon cues must prebuild hit targets immediately');
+assert(source.includes('document.querySelector(".menu-KhHHT")'), 'settings/menu guard missing');
+assert(source.includes('window.__subtitleBridgeExternalActive = null != t'), 'addon ownership flag missing');
+assert(source.includes('if (window.__subtitleBridgeExternalActive && !__sbSelecting && !__sbTranslationOpen) return;'), 'embedded key handler must not start MKV fallback for addon subtitles');
 assert(source.includes('e && (h.style.visibility = "hidden")'), 'normal addon subtitle should only be hidden when interactive selection is visible');
 assert(source.includes('__sbExtInteractiveOverlay.style.opacity = String(L)'), 'selection must reveal interactive addon subtitle');
 assert(source.includes('__sbExtCurrentLines = n'), 'normal renderer must capture the current cue without wordifying it');
@@ -26,4 +32,4 @@ assert(source.includes('/subtitle-bridge/lookup?word='), 'dictionary endpoint mu
 assert(source.includes('/subtitle-bridge/mkv-active-cue'), 'embedded v1.0.17 indexed active-cue path must remain intact');
 assert(source.includes('__sbMkvRequest && __sbMkvRequest.cancel()'), 'embedded stale seek cancellation must remain intact');
 
-console.log('PASS: v1.0.20 keeps addon subtitles below settings, avoids normal-playback word DOM work, and preserves selection/Magic/dictionary + indexed MKV');
+console.log('PASS: v1.0.21 addon cues stay ready/Magic-clickable, remain below settings, and never invoke embedded MKV fallback');
