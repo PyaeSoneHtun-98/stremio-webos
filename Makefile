@@ -96,6 +96,7 @@ test: build
 	@node --check service/www/video.chunk.js
 	@node scripts/test-embedded-subtitle-poc.js service/www/video.chunk.js
 	@node scripts/test-webos-subtitle-lifecycle.js service/www/video.chunk.js
+	@node scripts/test-subtitle-network-policy.js service/www/video.chunk.js
 	@node scripts/test-mkv-subtitle-extractor.js
 	@node scripts/test-mkv-subtitle-refresh.js service/www/video.chunk.js
 	@node scripts/test-dictionary-provider.js
