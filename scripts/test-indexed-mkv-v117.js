@@ -11,8 +11,9 @@ assert(start >= 0 && end > start, 'request lifecycle block missing');
 const requests = [];
 class FakeXHR {
     constructor() { this.readyState = 0; this.status = 0; this.aborted = false; requests.push(this); }
-    open(method, url) { this.method = method; this.url = url; }
-    send() {}
+    open(method, url) { this.method = method; this.url = url; this.headers = {}; }
+    setRequestHeader(name, value) { this.headers[name.toLowerCase()] = value; }
+    send() { assert.strictEqual(this.headers['x-subtitle-bridge-request'], '1', 'all embedded MKV requests must include local authorization header'); }
     abort() { this.aborted = true; if (this.onabort) this.onabort(); }
     complete(body) {
         this.responseText = JSON.stringify(body);
