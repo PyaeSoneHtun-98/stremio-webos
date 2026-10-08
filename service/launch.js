@@ -10,6 +10,7 @@ var Service = require('webos-service');
 var mkvSubtitleExtractor = require('./mkv-subtitle-extractor');
 var mkvCueWindowCache = require('./mkv-cue-window-cache').createMkvCueWindowCache(mkvSubtitleExtractor.extractWindow, { maxEntries: 2048, maxBytes: 4 * 1024 * 1024, ttlMs: 4 * 60 * 60 * 1000, bucketSeconds: 20 });
 var dictionaryProvider = require('./dictionary-provider');
+var mkvNetworkPolicy = require('./mkv-network-policy');
 
 var service = new Service('com.pyaesone.stremiosb.server');
 var ready = false;
@@ -105,7 +106,8 @@ function serveMkvSubtitleCues(req, res) {
     var mediaUrl = typeof query.from === 'string' ? normalizeMkvMediaUrl(query.from) : '';
     var trackOrdinal = parseInt(query.track, 10);
     var time = parseFloat(query.time);
-    if (!/^https?:\/\//i.test(mediaUrl)) { res.writeHead(400, {'Content-Type':'application/json; charset=utf-8'}); return res.end(JSON.stringify({error:'Unsupported media URL'})); }
+    try { mediaUrl = mkvNetworkPolicy.parseMediaUrl(mediaUrl).toString(); }
+    catch (_) { res.writeHead(400, {'Content-Type':'application/json; charset=utf-8'}); return res.end(JSON.stringify({error:'Unsupported media URL'})); }
     if (!isFinite(trackOrdinal) || trackOrdinal < 0) trackOrdinal = 0;
     if (!isFinite(time) || time < 0) time = 0;
 
@@ -145,7 +147,8 @@ function serveMkvActiveCue(req, res) {
     var mediaUrl = typeof query.from === 'string' ? normalizeMkvMediaUrl(query.from) : '';
     var trackOrdinal = parseInt(query.track, 10);
     var time = parseFloat(query.time);
-    if (!/^https?:\/\//i.test(mediaUrl)) { res.writeHead(400, {'Content-Type':'application/json; charset=utf-8'}); return res.end(JSON.stringify({error:'Unsupported media URL'})); }
+    try { mediaUrl = mkvNetworkPolicy.parseMediaUrl(mediaUrl).toString(); }
+    catch (_) { res.writeHead(400, {'Content-Type':'application/json; charset=utf-8'}); return res.end(JSON.stringify({error:'Unsupported media URL'})); }
     if (!isFinite(trackOrdinal) || trackOrdinal < 0) trackOrdinal = 0;
     if (!isFinite(time) || time < 0) time = 0;
     activateSubtitleMedia(mediaUrl);
@@ -261,11 +264,16 @@ function proxyToStreaming(req, res) {
 http.createServer(function(req, res) {
     var urlPath = req.url.split('?')[0];
     if (req.method === 'GET' && urlPath === '/subtitle-bridge/lookup') return serveDictionaryLookup(req, res);
+    if (req.method === 'GET' && (urlPath === '/subtitle-bridge/mkv-cues' || urlPath === '/subtitle-bridge/mkv-active-cue') &&
+        !mkvNetworkPolicy.isAuthorizedMkvRequest(req.headers)) {
+        res.writeHead(403, {'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});
+        return res.end(JSON.stringify({error:'Unauthorized subtitle request'}));
+    }
     if (req.method === 'GET' && urlPath === '/subtitle-bridge/mkv-cues') return serveMkvSubtitleCues(req, res);
     if (req.method === 'GET' && urlPath === '/subtitle-bridge/mkv-active-cue') return serveMkvActiveCue(req, res);
     if (req.method === 'GET' && urlPath === '/subtitle-bridge/diagnostics') return serveDiagnostics(res);
     serveStatic(urlPath, res, function() { proxyToStreaming(req, res); });
-}).listen(8080, function() {
+}).listen(8080, '127.0.0.1', function() {
     ready = true;
     // Respond to any start calls that arrived before the server was ready
     pendingMessages.forEach(function(msg) { msg.respond({ ready: true }); });
