@@ -42,7 +42,15 @@ function normalizePhraseToken(value) {
 }
 
 function normalizePhrase(value) {
-    return normalize(value).split(/\s+/).map(normalizePhraseToken).filter(Boolean).join(' ');
+    // Match the word boundaries of the desktop/player subtitle tokenizer.
+    // "went pear-shaped" has three selectable words, not two.
+    var source = String(value == null ? '' : value);
+    var pieces;
+    try { pieces = source.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu) || []; }
+    catch (_) { pieces = source.match(/[A-Za-z0-9]+(?:['’][A-Za-z0-9]+)*/g) || []; }
+    return pieces.filter(function(piece) {
+        try { return /\p{L}/u.test(piece); } catch (_) { return /[A-Za-z]/.test(piece); }
+    }).map(normalizePhraseToken).filter(Boolean).join(' ');
 }
 
 function phraseTypeLabel(type) {
@@ -52,13 +60,41 @@ function phraseTypeLabel(type) {
     return String(type || 'Phrase');
 }
 
-function createProvider(dictionaryDataset, phraseDataset, coreEntries, aliases) {
+function createProvider(dictionaryDataset, phraseDataset, coreEntries, aliases, dictionaryExtension, phraseExtension, correctionDataset) {
     var dictionaryEntries = dictionaryDataset && Array.isArray(dictionaryDataset.entries) ? dictionaryDataset.entries : [];
-    var extraEntries = coreEntries || [];
+    var rawExtension = dictionaryExtension && Array.isArray(dictionaryExtension.entries) ? dictionaryExtension.entries : [];
+    var corrections = correctionDataset && Array.isArray(correctionDataset.entries) ? correctionDataset.entries : [];
+    var rawByWord = Object.create(null), correctionByWord = Object.create(null);
+    var baseHeads = Object.create(null), extensionHeads = Object.create(null);
+    dictionaryEntries.forEach(function(entry) { baseHeads[normalize(entry.word)] = true; });
+    rawExtension.forEach(function(entry) {
+        var key = normalize(entry.word);
+        if (!key || baseHeads[key] || rawByWord[key]) throw new Error('Dictionary extension headword collision: ' + key);
+        rawByWord[key] = entry;
+        extensionHeads[key] = true;
+    });
+    corrections.forEach(function(entry) {
+        var key = normalize(entry.word);
+        if (!rawByWord[key] || correctionByWord[key]) throw new Error('Invalid dictionary correction target: ' + key);
+        var storedForms = (entry.forms || []).map(normalize);
+        if ((rawByWord[key].forms || []).some(function(form) { return storedForms.indexOf(normalize(form)) === -1; })) {
+            throw new Error('Dictionary correction loses an original form: ' + key);
+        }
+        correctionByWord[key] = entry;
+    });
+    var extensionEntries = rawExtension.map(function(entry) { return correctionByWord[normalize(entry.word)] || entry; });
+    var reconciledCore = { go:true, love:true, run:true, see:true, wait:true };
+    var extraEntries = (coreEntries || []).filter(function(entry) {
+        var key = normalize(entry.word);
+        if (!extensionHeads[key]) return true;
+        if (!reconciledCore[key] || !correctionByWord[key]) throw new Error('Unreviewed core overlap: ' + key);
+        return false;
+    });
     var index = Object.create(null), phraseVariants = Object.create(null), maxPhraseTokens = 0;
 
     function eachEntry(callback) {
         dictionaryEntries.forEach(callback);
+        extensionEntries.forEach(callback);
         extraEntries.forEach(callback);
     }
     eachEntry(function(entry) {
@@ -82,13 +118,19 @@ function createProvider(dictionaryDataset, phraseDataset, coreEntries, aliases) 
         });
     });
 
-    var phraseEntries = phraseDataset && Array.isArray(phraseDataset.entries) ? phraseDataset.entries : [];
+    var phraseEntries = phraseDataset && Array.isArray(phraseDataset.entries) ? phraseDataset.entries.slice() : [];
+    if (phraseExtension && Array.isArray(phraseExtension.entries)) {
+        Array.prototype.push.apply(phraseEntries, phraseExtension.entries);
+    }
     phraseEntries.forEach(function(entry) {
         [entry.phrase].concat(entry.forms || []).forEach(function(raw) {
             var variant = normalizePhrase(raw);
             if (!variant) return;
             var count = variant.split(' ').length;
             if (count < 2) return;
+            if (phraseVariants[variant] && phraseVariants[variant].entry !== entry) {
+                throw new Error('Phrase variant collision: ' + variant);
+            }
             if (!phraseVariants[variant]) phraseVariants[variant] = { entry: entry, tokenCount: count };
             if (count > maxPhraseTokens) maxPhraseTokens = count;
         });
@@ -152,7 +194,7 @@ function createProvider(dictionaryDataset, phraseDataset, coreEntries, aliases) 
                 resolvedFromForm: normalize(entry.word) !== normalize(lookupWord)
             };
         },
-        counts: { dictionary: dictionaryEntries.length + extraEntries.length, phrases: phraseEntries.length,
+        counts: { dictionary: dictionaryEntries.length + extensionEntries.length + extraEntries.length, phrases: phraseEntries.length,
             dictionaryKeys: Object.keys(index).length, phraseVariants: Object.keys(phraseVariants).length }
     };
 }
@@ -163,12 +205,27 @@ function loadDefaultProvider() {
     var beforeHeap = process.memoryUsage ? process.memoryUsage().heapUsed : 0;
     var dictionaryPath = path.join(__dirname, 'data', 'dictionary.json');
     var phrasesPath = path.join(__dirname, 'data', 'phrases.json');
+    var extensionPath = path.join(__dirname, 'data', 'dictionary-extension.json');
+    var correctionPath = path.join(__dirname, 'data', 'dictionary-extension-corrections.json');
+    var phraseExtensionPath = path.join(__dirname, 'data', 'phrases-extension.json');
     var dictionary = JSON.parse(fs.readFileSync(dictionaryPath, 'utf8'));
     var phrases = JSON.parse(fs.readFileSync(phrasesPath, 'utf8'));
-    singleton = createProvider(dictionary, phrases, CORE_ENTRIES, LEGACY_ALIASES);
+    var extension = JSON.parse(fs.readFileSync(extensionPath, 'utf8'));
+    var phraseExtension = JSON.parse(fs.readFileSync(phraseExtensionPath, 'utf8'));
+    var corrections = JSON.parse(fs.readFileSync(correctionPath, 'utf8'));
+    if (dictionary.version !== 1 || dictionary.entries.length !== 30000 ||
+        phrases.version !== 1 || phrases.entries.length !== 3000 ||
+        extension.version !== 1 || extension.entries.length !== 10000 ||
+        phraseExtension.version !== 1 || phraseExtension.entries.length !== 1000 ||
+        corrections.version !== 1 || corrections.entries.length !== 19) {
+        throw new Error('Unexpected Subtitle Bridge dictionary corpus');
+    }
+    singleton = createProvider(dictionary, phrases, CORE_ENTRIES, LEGACY_ALIASES,
+        extension, phraseExtension, corrections);
     defaultStats = { loaded:true, initializationMs:Date.now()-started,
         heapDeltaBytes:Math.max(0,(process.memoryUsage ? process.memoryUsage().heapUsed : beforeHeap)-beforeHeap),
-        dictionaryFileBytes:fs.statSync(dictionaryPath).size, phraseFileBytes:fs.statSync(phrasesPath).size,
+        dictionaryFileBytes:fs.statSync(dictionaryPath).size + fs.statSync(extensionPath).size + fs.statSync(correctionPath).size,
+        phraseFileBytes:fs.statSync(phrasesPath).size + fs.statSync(phraseExtensionPath).size,
         counts:singleton.counts };
     return singleton;
 }
