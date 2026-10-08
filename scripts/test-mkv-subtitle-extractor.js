@@ -2,6 +2,12 @@
 const assert = require('assert');
 const http = require('http');
 const extractor = require('../service/mkv-subtitle-extractor');
+// The synthetic fixture runs on an ephemeral loopback port. Bypass only the
+// outbound URL policy in this extraction-specific test; policy has its own
+// negative/redirect tests and is enforced in the production service.
+const networkPolicy = require('../service/mkv-network-policy');
+networkPolicy.parseMediaUrl = function(target) { return new (require('url').URL)(target); };
+networkPolicy.safeLookup = require('dns').lookup;
 
 function id(n) { const a=[]; while(n){a.unshift(n&255);n=Math.floor(n/256)} return Buffer.from(a); }
 function vint(n) { if(n<0x7f)return Buffer.from([0x80|n]); if(n<0x3fff)return Buffer.from([0x40|((n>>8)&0x3f),n&255]); if(n<0x1fffff)return Buffer.from([0x20|((n>>16)&0x1f),(n>>8)&255,n&255]); return Buffer.from([0x10|((n>>>24)&15),(n>>>16)&255,(n>>>8)&255,n&255]); }
