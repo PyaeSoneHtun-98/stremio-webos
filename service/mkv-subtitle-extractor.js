@@ -4,6 +4,7 @@ var http = require('http');
 var https = require('https');
 var zlib = require('zlib');
 var URLCtor = require('url').URL;
+var mkvNetworkPolicy = require('./mkv-network-policy');
 
 var HEAD_BYTES = 4 * 1024 * 1024;
 var INITIAL_HEAD_BYTES = 256 * 1024;
@@ -182,12 +183,12 @@ function requestBuffer(target, start, end, redirects, context) {
     return new Promise(function(resolve, reject) {
         try { cancelled(context); } catch (error) { return reject(error); }
         var parsed;
-        try { parsed = new URLCtor(target); } catch (e) { return reject(new Error('Invalid media URL')); }
+        try { parsed = mkvNetworkPolicy.parseMediaUrl(target); } catch (e) { return reject(e); }
         var client = parsed.protocol === 'https:' ? https : parsed.protocol === 'http:' ? http : null;
         if (!client) return reject(new Error('Unsupported media protocol'));
         var headers = {};
         if (start !== null && start !== undefined) headers.Range = 'bytes=' + start + '-' + end;
-        var req = client.get(parsed, { headers: headers }, function(res) {
+        var req = client.get(parsed, { headers: headers, lookup: mkvNetworkPolicy.safeLookup }, function(res) {
             if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location && redirects < 4) {
                 res.resume();
                 return resolve(requestBuffer(new URLCtor(res.headers.location, parsed).toString(), start, end, redirects + 1, context));
