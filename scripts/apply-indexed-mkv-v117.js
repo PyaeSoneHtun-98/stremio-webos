@@ -33,7 +33,7 @@ replaceSection('indexed MKV request lifecycle', '                function __sbEn
                     var promise = new Promise(function(resolve, reject) {
                         function fail(error) { if (!settled) settled = !0, reject(error) }
                         try {
-                            xhr.open("GET", url, !0), xhr.timeout = 4e4;
+                            xhr.open("GET", url, !0), xhr.setRequestHeader("X-Subtitle-Bridge-Request", "1"), xhr.timeout = 4e4;
                             xhr.onreadystatechange = function() {
                                 if (4 !== xhr.readyState || settled) return;
                                 settled = !0;
