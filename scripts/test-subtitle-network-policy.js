@@ -33,7 +33,8 @@ async function main() {
         'http://localhost:8080/', 'http://192.168.1.5:8096/', 'http://10.0.0.5/a',
         'http://172.16.0.1/a', 'http://100.64.0.1/a', 'http://169.254.169.254/metadata',
         'http://0x7f000001:8080/', 'http://[::1]:8080/', 'http://[::ffff:127.0.0.1]/',
-        'http://[fc00::1]/', 'http://192.0.2.1/a', 'http://example.local/',
+        'http://[fc00::1]/', 'http://[2001::1]/', 'http://192.0.2.1/a',
+        'http://192.0.0.9/a', 'http://example.local/',
         'file:///etc/passwd', 'http://user:password@media.example.com/video.mkv'
     ].forEach(rejected);
 
