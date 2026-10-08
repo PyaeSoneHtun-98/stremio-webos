@@ -8,6 +8,12 @@ FFMPEG_URL = https://johnvansickle.com/ffmpeg/releases/ffmpeg-$(FFMPEG_VERSION)-
 FFMPEG_SHA256 = f4149bb2b0784e30e99bdda85471c9b5930d3402014e934a5098b41d0f7201b1
 DICTIONARY_DATA_REF = f875a3b5a52be294f27e5d6907c86c253f494714
 DICTIONARY_DATA_BASE = https://raw.githubusercontent.com/PyaeSoneHtun-98/stremio_dictionary/$(DICTIONARY_DATA_REF)/src/main/translation/data
+# Desktop PR #80 validated the 061-080 vocabulary, 013-016 phrases and 19 app corrections.
+DICTIONARY_EXTENSION_REF = 91cb213a7f0e77018ff7fc14ec6e93c40d872fba
+DICTIONARY_EXTENSION_BASE = https://raw.githubusercontent.com/PyaeSoneHtun-98/stremio_dictionary/$(DICTIONARY_EXTENSION_REF)/src/main/translation/data
+DICTIONARY_EXTENSION_SHA256 = 2c0818ba6d5d835af2a28a5d2a98c0a96b6414d0af2c252bf9caf32a1bc16086
+PHRASES_EXTENSION_SHA256 = 26a932d88b8bda52638de7eaf2bc1adb78e0b36099250fa8523f550853ffbb85
+DICTIONARY_CORRECTIONS_SHA256 = a12cd2cffe7da1ee3d43f7f8757b410df73dbfbf908bf4c199585adea8c9d145
 VERSION = $(shell python3 -c "import json; print(json.load(open('app/appinfo.json'))['version'])")
 IPK = $(APP_ID)_$(VERSION)_all.ipk
 
@@ -31,6 +37,27 @@ service/data/phrases.json:
 	@node -e "const fs=require('fs');const x=JSON.parse(fs.readFileSync('/tmp/subtitle-bridge-phrases.json','utf8'));if(x.version!==1||!Array.isArray(x.entries)||x.entries.length<1000)throw new Error('Unexpected phrase dataset');fs.writeFileSync('service/data/phrases.json',JSON.stringify(x));"
 	@rm -f /tmp/subtitle-bridge-phrases.json
 
+service/data/dictionary-extension.json:
+	@echo "==> Downloading verified 10K dictionary extension..."
+	@mkdir -p service/data
+	@curl -fsSL "$(DICTIONARY_EXTENSION_BASE)/dictionary-extension.json" -o /tmp/subtitle-bridge-dictionary-extension.json
+	@node scripts/install-dictionary-asset.js /tmp/subtitle-bridge-dictionary-extension.json $@ $(DICTIONARY_EXTENSION_SHA256) 10000
+	@rm -f /tmp/subtitle-bridge-dictionary-extension.json
+
+service/data/phrases-extension.json:
+	@echo "==> Downloading verified 1K phrase extension..."
+	@mkdir -p service/data
+	@curl -fsSL "$(DICTIONARY_EXTENSION_BASE)/phrases-extension.json" -o /tmp/subtitle-bridge-phrases-extension.json
+	@node scripts/install-dictionary-asset.js /tmp/subtitle-bridge-phrases-extension.json $@ $(PHRASES_EXTENSION_SHA256) 1000
+	@rm -f /tmp/subtitle-bridge-phrases-extension.json
+
+service/data/dictionary-extension-corrections.json:
+	@echo "==> Downloading verified 19 desktop dictionary corrections..."
+	@mkdir -p service/data
+	@curl -fsSL "$(DICTIONARY_EXTENSION_BASE)/dictionary-extension-corrections.json" -o /tmp/subtitle-bridge-dictionary-corrections.json
+	@node scripts/install-dictionary-asset.js /tmp/subtitle-bridge-dictionary-corrections.json $@ $(DICTIONARY_CORRECTIONS_SHA256) 19
+	@rm -f /tmp/subtitle-bridge-dictionary-corrections.json
+
 service/bin/ffmpeg service/bin/ffprobe:
 	@echo "==> Downloading static ffmpeg+ffprobe v$(FFMPEG_VERSION) (aarch64)..."
 	@rm -rf /tmp/stremio-ffmpeg && mkdir -p /tmp/stremio-ffmpeg service/bin
@@ -41,7 +68,7 @@ service/bin/ffmpeg service/bin/ffprobe:
 	@chmod +x service/bin/ffmpeg service/bin/ffprobe
 	@rm -rf /tmp/stremio-ffmpeg
 
-build: service/server.js service/bin/ffmpeg service/bin/ffprobe service/data/dictionary.json service/data/phrases.json
+build: service/server.js service/bin/ffmpeg service/bin/ffprobe service/data/dictionary.json service/data/phrases.json service/data/dictionary-extension.json service/data/phrases-extension.json service/data/dictionary-extension-corrections.json
 	@echo "==> Downloading Vidaa frontend..."
 	@rm -rf /tmp/stremio-vidaa-build && mkdir -p /tmp/stremio-vidaa-build
 	@curl -sL $(VIDAA_REPO) | tar xz --strip-components=1 -C /tmp/stremio-vidaa-build
@@ -100,6 +127,7 @@ test: build
 	@node scripts/test-mkv-subtitle-extractor.js
 	@node scripts/test-mkv-subtitle-refresh.js service/www/video.chunk.js
 	@node scripts/test-dictionary-provider.js
+	@node scripts/test-dictionary-expansion.js
 	@node scripts/test-tv-dictionary-popup.js service/www/video.chunk.js
 	@node scripts/test-tv-interactions-v114.js service/www/video.chunk.js
 	@node scripts/test-tv-word-tokenizer-v115.js service/www/video.chunk.js
